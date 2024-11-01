@@ -144,8 +144,10 @@ void tracker_OM_adjacent() {
             float tcol_max = tab_column.at(col) + 4;
 
             hit_caloid = (13*col) + (260*caloside->at(j)) + calorow->at(j);          
-            hit_energy = (charge->at(j))*calib[hit_caloid]*(-1/1000);          //changed to MeV, minus sign
-            if (hit_energy < 0.3) {continue;}
+            hit_energy = (charge->at(j))*calib[hit_caloid]*(-1./1000.);             //changed to MeV and flipped sign
+            if (hit_energy < 0.3) {continue;}          
+
+            //cout << "Event: " << event << "\tCaloID: " << hit_caloid << "\tCharge: " << charge->at(j) << "\tE: " << hit_energy << "\n";
 
             for (int k=0; k<trackercolumn->size(); k++) {
                 if (trackerside->at(k) != caloside->at(j)) {continue;}          //check same side
