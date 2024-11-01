@@ -91,7 +91,7 @@ void tracker_OM_adjacent() {
     tree->SetBranchStatus("digitracker.layer", 1);
     tree->SetBranchAddress("digitracker.layer", &trackerlayer);
 
-    //get cut of events with a calorimeter hit, maybe add tracker cells > 3. 
+    //get cut of events with a calorimeter hit, maybe add tracker cells > 3
     TCut cut_calohit = "digicalo.nohits > 3";    //pairing
 
     tree->Draw(">>elist", cut_calohit, "entrylist");
