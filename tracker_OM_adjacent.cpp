@@ -97,7 +97,7 @@ void tracker_OM_adjacent() {
     tree->Draw(">>elist", cut_calohit, "entrylist");
     TEntryList *elist = (TEntryList*)gDirectory->Get("elist");
     int totalentries = elist->GetN();
-    cout << totalentries << " entries with 1+ calorimeter hit\n";
+    cout << totalentries << " entries with 4+ calorimeter hits\n";
 
     //create outfile and tree for particle tracks
     TFile *out = new TFile("tracks.root", "RECREATE");
@@ -134,7 +134,7 @@ void tracker_OM_adjacent() {
     //check calorimeters for nearby active tracker cells
     int good_events = 0;
 
-    for (int i=0; i < 5; i++) {
+    for (int i=0; i < totalentries; i++) {
         int entryno = elist->GetEntry(i);
         tree->GetEntry(entryno);
 
@@ -143,6 +143,10 @@ void tracker_OM_adjacent() {
             float tcol_min = tab_column.at(col) - 4; 
             float tcol_max = tab_column.at(col) + 4;
 
+            hit_caloid = (13*col) + (260*caloside->at(j)) + calorow->at(j);          
+            hit_energy = (charge->at(j))*calib[hit_caloid]*(-1/1000);          //changed to MeV, minus sign
+            if (hit_energy < 0.3) {continue;}
+
             for (int k=0; k<trackercolumn->size(); k++) {
                 if (trackerside->at(k) != caloside->at(j)) {continue;}          //check same side
                 if (trackerlayer->at(k) < 7) {continue;}                        //check layer 8 or 9
@@ -150,13 +154,12 @@ void tracker_OM_adjacent() {
                 int tcol = trackercolumn->at(k);
                 int tlayer = trackerlayer->at(k);
                 int tside = trackerside->at(k);
-                if (tcol <= tcol_max && tcol >= tcol_min) {                     //check within OM range
-                    //do something or output something
+                if (tcol <= tcol_max && tcol >= tcol_min) {      
+                    
                     hitentry = good_events;
                     good_events += 1;
 
                     hit_eventid = event;
-                    hit_caloid = (13*col) + (260*caloside->at(j)) + calorow->at(j);
                     hit_time = timestamp->at(j);
 
                     hittrackSide->clear();
@@ -165,10 +168,6 @@ void tracker_OM_adjacent() {
                     hittrackSide->push_back(tside);
                     hittrackColumn->push_back(tcol);
                     hittrackLayer->push_back(tlayer);
-
-                    hit_energy = (charge->at(j))*calib[hit_caloid];        //in keV
-                    cout << charge->at(j) << "\n";
-                    cout << calib[hit_caloid] << "\t" << hit_caloid << "\t" << hit_energy << "\n";
 
                     /*         FIND BETTER WAY TO DO THIS, maybe cuts? --------------------------------------
 
