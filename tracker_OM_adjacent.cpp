@@ -107,9 +107,9 @@ void tracker_OM_adjacent() {
     int hit_caloid = 0;
     double hit_energy = 0;
     long hit_time = 0;
-    vector<int> *hittrackSide = new vector<int>;
-    vector<int> *hittrackColumn = new vector<int>;
-    vector<int> *hittrackLayer = new vector<int>;
+    int hittrackSide = 0;            //temporarily ints
+    int hittrackColumn = 0;
+    int hittrackLayer = 0;
     outtree->Branch("entry", &hitentry, "hitentry/I");
     outtree->Branch("hit_event_id", &hit_eventid, "hit_eventid/I");
     outtree->Branch("hit_timestamp", &hit_time);
@@ -131,6 +131,9 @@ void tracker_OM_adjacent() {
         calib.push_back(n2);
     }
 
+    //check specific calorimeter for energy spectrum
+    TH1D *spectrum = new TH1D("spectrum", "Energies for given OM", 100, 0, 10);
+
     //check calorimeters for nearby active tracker cells
     int good_events = 0;
 
@@ -138,16 +141,18 @@ void tracker_OM_adjacent() {
         int entryno = elist->GetEntry(i);
         tree->GetEntry(entryno);
 
+        if (trackercolumn->size() < 4) {continue;}
+
         for (int j=0; j<calohits; j++) {          //for each hit calorimeter j
             int col = calocolumn->at(j); 
-            float tcol_min = tab_column.at(col) - 4; 
-            float tcol_max = tab_column.at(col) + 4;
+            float tcol_min = tab_column.at(col) - 4.; 
+            float tcol_max = tab_column.at(col) + 4.;
 
             hit_caloid = (13*col) + (260*caloside->at(j)) + calorow->at(j);          
             hit_energy = (charge->at(j))*calib[hit_caloid]*(-1./1000.);             //changed to MeV and flipped sign
             if (hit_energy < 0.3) {continue;}          
 
-            //cout << "Event: " << event << "\tCaloID: " << hit_caloid << "\tCharge: " << charge->at(j) << "\tE: " << hit_energy << "\n";
+            if (hit_caloid == 123) {spectrum->Fill(hit_energy);}                //record energies at specific OM 
 
             for (int k=0; k<trackercolumn->size(); k++) {
                 if (trackerside->at(k) != caloside->at(j)) {continue;}          //check same side
@@ -164,14 +169,14 @@ void tracker_OM_adjacent() {
                     hit_eventid = event;
                     hit_time = timestamp->at(j);
 
-                    hittrackSide->clear();
-                    hittrackColumn->clear();
-                    hittrackLayer->clear();
-                    hittrackSide->push_back(tside);
-                    hittrackColumn->push_back(tcol);
-                    hittrackLayer->push_back(tlayer);
+                    //cout << "Event: " << event << "\tCaloID: " << hit_caloid << "\tCharge: " << charge->at(j) << "\tE: " << hit_energy << "\tCaloCol: " << col << "\n";
+                    //cout << "Tside: " << tside << "\tTcol: " << tcol << "\tTlayer: " << tlayer << "\n\n";
 
-                    /*         FIND BETTER WAY TO DO THIS, maybe cuts? --------------------------------------
+                    hittrackSide = tside;
+                    hittrackColumn = tcol;
+                    hittrackLayer = tlayer;
+
+                    /*         TODO 02/11: implement vector<vector<int>> to count track length and keep 4+
 
                     while (1) {
                         int start = 0;
@@ -218,5 +223,7 @@ void tracker_OM_adjacent() {
     out->cd();
     outtree->Write();
     cout << "Adjacent events: " << good_events << "\n";
+    spectrum->SetTitle("Energy spectrum for specific OM;Energy (MeV);Count");
+    spectrum->Draw();
 
 }
