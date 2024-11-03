@@ -38,10 +38,12 @@ om id = 260*side + column*13 + row
 tracker id = side + column*9 + layer           (maybe wrong)
 */
 
-bool within_two(int a, int b) {
-    //check if: b-2 <= a <= b+2
-    if (a >= (b-2) && a <= (b+2)) {return 1;}
-    return 0;
+bool within_two(vector<int> a, vector<int> b) {
+    //check if 3D vectors are within a 2x2 box on the same side. takes {side, col, layer}. 
+    if (a[0] != b[0]) {return 0;}
+    if (a[1] < (b[1]-2) || a[1] > (b[1]+2)) {return 0;}
+    if (a[2] < (b[2]-2) || a[1] > (b[2]+2)) {return 0;}
+    return 1;
 }
 
 void tracker_OM_adjacent() {
@@ -107,17 +109,15 @@ void tracker_OM_adjacent() {
     int hit_caloid = 0;
     double hit_energy = 0;
     long hit_time = 0;
-    int hittrackSide = 0;            //temporarily ints
-    int hittrackColumn = 0;
-    int hittrackLayer = 0;
+
+    gInterpreter->GenerateDictionary("vector<vector<int> >","vector");          //trying this
+    vector<vector<int>> *hit_track = new vector<vector<int>>;
     outtree->Branch("entry", &hitentry, "hitentry/I");
     outtree->Branch("hit_event_id", &hit_eventid, "hit_eventid/I");
     outtree->Branch("hit_timestamp", &hit_time);
     outtree->Branch("hit_calo_id", &hit_caloid, "hit_caloid/I");
     outtree->Branch("hit_energy", &hit_energy, "hit_energy/D");
-    outtree->Branch("hit_track_side", &hittrackSide);
-    outtree->Branch("hit_track_column", &hittrackColumn);
-    outtree->Branch("hit_track_layer", &hittrackLayer);
+    outtree->Branch("hit_track", &hit_track);
 
     //comparison vector, +- 4 inclusive gives tracker columns 
     vector<double> tab_column = {0.8, 6.8, 12.5, 18.2, 24.2, 29.9, 35.9, 41.8, 46.7, 53.6, 59.4, 65.3, 71.1, 77, 83.1, 88.8, 94.8, 100.6, 106.4, 112.2};
@@ -137,7 +137,7 @@ void tracker_OM_adjacent() {
     //check calorimeters for nearby active tracker cells
     int good_events = 0;
 
-    for (int i=0; i < totalentries; i++) {
+    for (int i=0; i < 10000; i++) {
         int entryno = elist->GetEntry(i);
         tree->GetEntry(entryno);
 
@@ -154,6 +154,8 @@ void tracker_OM_adjacent() {
 
             if (hit_caloid == 123) {spectrum->Fill(hit_energy);}                //record energies at specific OM 
 
+            vector<vector<int>> *track = new vector<vector<int>>;
+
             for (int k=0; k<trackercolumn->size(); k++) {
                 if (trackerside->at(k) != caloside->at(j)) {continue;}          //check same side
                 if (trackerlayer->at(k) < 7) {continue;}                        //check layer 8 or 9
@@ -161,60 +163,42 @@ void tracker_OM_adjacent() {
                 int tcol = trackercolumn->at(k);
                 int tlayer = trackerlayer->at(k);
                 int tside = trackerside->at(k);
-                if (tcol <= tcol_max && tcol >= tcol_min) {      
-                    
-                    hitentry = good_events;
-                    good_events += 1;
 
-                    hit_eventid = event;
-                    hit_time = timestamp->at(j);
-
-                    //cout << "Event: " << event << "\tCaloID: " << hit_caloid << "\tCharge: " << charge->at(j) << "\tE: " << hit_energy << "\tCaloCol: " << col << "\n";
-                    //cout << "Tside: " << tside << "\tTcol: " << tcol << "\tTlayer: " << tlayer << "\n\n";
-
-                    hittrackSide = tside;
-                    hittrackColumn = tcol;
-                    hittrackLayer = tlayer;
-
-                    /*         TODO 02/11: implement vector<vector<int>> to count track length and keep 4+
-
-                    while (1) {
-                        int start = 0;
-                        int tracksize = hittrackColumn->size();
-                        for (int l=start;l<tracksize; l++) {           //loop through current track
-
-                            for (int m=0; m<trackercolumn->size();m++) {
-
-                                bool duplicate = 0;                 //check not already in track vector
-                                for (int n=0;n<tracksize;n++){
-                                    if (trackerside->at(m) == hittrackSide->at(n) &&
-                                        trackercolumn->at(m) == hittrackColumn->at(n) &&
-                                        trackerlayer->at(m) == hittrackLayer->at(n)) {duplicate = 1;}
-                                }
-
-                                if (duplicate) {continue;}
-                                if (trackerside->at(m) != hittrackSide->at(l)) {continue;}
-                                if (within_two(trackercolumn->at(m), hittrackColumn->at(l)) == 0) {continue;}
-                                if (within_two(trackerlayer->at(m), hittrackLayer->at(l)) == 0) {continue;}
-
-                                //append track vector
-                                hittrackSide->push_back(trackerside->at(m));
-                                hittrackColumn->push_back(trackercolumn->at(m));
-                                hittrackLayer->push_back(trackerlayer->at(m));
-                                
-                            }
-
-                            start += 1;
-
-                        }
+                if (tcol <= tcol_max && tcol >= tcol_min) {              
+                    track->push_back({tside, tcol, tlayer});                                      
+                }
+            
+            //loop again to reconstruct then save 
+            if (track->size() == 0) {continue;}
+            while (true == true) {
+                int pre_size = track->size();
+                for (int l=0; l<track->size();l++) {
+                    for (int m=0;m<trackercolumn->size();m++) {
+                        vector<int> next_tracker = {trackerside->at(m), trackercolumn->at(m), trackerlayer->at(m)};
                         
-                        if (tracksize == hittrackColumn->size()) {break;}       //break if nothing changes
-                    }      
-                    */
+                        bool dupe = 0;                                      //check not already in track vector
+                        for (int n=0;n<track->size();n++) {
+                            if (next_tracker == track->at(n)) {dupe = 1;}
+                        }
+                        if (dupe == 1) {continue;}
 
-                    outtree->Fill();
+                        if (within_two(track->at(l), next_tracker)) {       //append to track vector if within 2x2 box
+                            track->push_back(next_tracker);               
+                        }
+                    }
+                }
+                if (pre_size == track->size()) {break;}
+            }
 
-                    break;                                                 
+            if (track->size() > 3) {                        //save as "good" event if track length > 3 
+                hitentry = good_events;
+                good_events += 1;
+
+                hit_eventid = event;
+                hit_time = timestamp->at(j);
+
+                hit_track = track;                           //add this to outtree
+                outtree->Fill();
                 }
             }
         }
