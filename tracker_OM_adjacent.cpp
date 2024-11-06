@@ -65,6 +65,7 @@ void tracker_OM_adjacent() {
     vector<int> *trackerside = new vector<int>;
     vector<int> *trackercolumn = new vector<int>;
     vector<int> *trackerlayer = new vector<int>;
+    vector<int> *wall = new vector<int>;
     tree->SetBranchStatus("*", 0);
     tree->SetBranchStatus("header.eventnumber", 1);
     tree->SetBranchAddress("header.eventnumber", &event);
@@ -82,6 +83,8 @@ void tracker_OM_adjacent() {
     tree->SetBranchAddress("digicalo.timestamp", &timestamp);
     tree->SetBranchStatus("digicalo.charge", 1);
     tree->SetBranchAddress("digicalo.charge", &charge);
+    tree->SetBranchStatus("digicalo.wall", 1);
+    tree->SetBranchAddress("digicalo.wall", &wall);
     tree->SetBranchStatus("digitracker.id", 1);                    //trackers
     tree->SetBranchAddress("digitracker.id", &trackerid);
     tree->SetBranchStatus("digitracker.nohits", 1);                 
@@ -145,12 +148,14 @@ void tracker_OM_adjacent() {
         if (calohits < 4) {continue;}
         if (trackercolumn->size() < 4) {continue;}
 
-        for (int j=0; j<calohits; j++) {          //for each hit calorimeter j
+        for (int j=0; j<calohits; j++) {            //for each hit calorimeter j
+            if (wall->at(j) != -1) {continue;}      //main wall only?
+
             int col = calocolumn->at(j); 
             float tcol_min = tab_column.at(col) - 4.; 
             float tcol_max = tab_column.at(col) + 4.;
 
-            vector<vector<int>> track = {};
+            vector<vector<int>> *track = new vector<vector<int>>;
 
             hit_caloid = (13*col) + (260*caloside->at(j)) + calorow->at(j);          
             hit_energy = (charge->at(j))*calib[hit_caloid]*(-1./4194.304);             //changed to MeV and flipped sign
@@ -167,40 +172,44 @@ void tracker_OM_adjacent() {
                 int tside = trackerside->at(k);
 
                 if (tcol <= tcol_max && tcol >= tcol_min) {              
-                    track.push_back({tside, tcol, tlayer});
+                    track->push_back({tside, tcol, tlayer});
+                    break;
                 }
-            
+            }
             //loop again to reconstruct then save 
-            if (track.size() == 0) {continue;}
+            if (track->size() == 0) {continue;}
             while (true == true) {
-                int pre_size = track.size();
-                for (int l=0; l<track.size();l++) {
+                int pre_size = track->size();
+                for (int l=0; l<track->size();l++) {
                     for (int m=0;m<trackercolumn->size();m++) {
                         vector<int> next_tracker = {trackerside->at(m), trackercolumn->at(m), trackerlayer->at(m)};
                         
                         bool dupe = 0;                                      //check not already in track vector
-                        for (int n=0;n<track.size();n++) {
-                            if (next_tracker == track.at(n)) {dupe = 1;}
+                        for (int n=0;n<track->size();n++) {
+                            if (next_tracker == track->at(n)) {dupe = 1;}
                         }
                         if (dupe == 1) {continue;}
 
-                        if (within_two(track.at(l), next_tracker)) {       //append to track vector if within 2x2 box
-                            track.push_back(next_tracker);               
+                        if (within_two(track->at(l), next_tracker)) {       //append to track vector if within 2x2 box
+                            track->push_back(next_tracker);               
                         }
                     }
                 }
-                if (pre_size == track.size()) {break;}
-            }
 
-            if (track.size() > 3) {                        //save as "good" event if track length > 3 
-                hitentry = good_events;
-                good_events += 1;
+                if (pre_size == track->size()) {
+                    if (track->size() > 3) {                        //save as "good" event if track length > 3 
 
-                hit_eventid = event;
-                hit_time = timestamp->at(j);
+                        hitentry = good_events;
+                        good_events += 1;
 
-                hit_track = &track;                           //add this to outtree
-                outtree->Fill();
+                        hit_eventid = event;
+                        hit_time = timestamp->at(j);
+
+                        hit_track = track;                           //add this to outtree
+                        outtree->Fill();
+                    }
+
+                    break;
                 }
             }
         }
