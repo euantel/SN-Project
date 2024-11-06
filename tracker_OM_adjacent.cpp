@@ -93,6 +93,7 @@ void tracker_OM_adjacent() {
     tree->SetBranchStatus("digitracker.layer", 1);
     tree->SetBranchAddress("digitracker.layer", &trackerlayer);
 
+    
     //get cut of events with a calorimeter hit, maybe add tracker cells > 3
     TCut cut_calohit = "digicalo.nohits > 3";    //pairing
 
@@ -100,7 +101,7 @@ void tracker_OM_adjacent() {
     TEntryList *elist = (TEntryList*)gDirectory->Get("elist");
     int totalentries = elist->GetN();
     cout << totalentries << " entries with 4+ calorimeter hits\n";
-
+    
     //create outfile and tree for particle tracks
     TFile *out = new TFile("tracks.root", "RECREATE");
     TTree *outtree = new TTree("tracks", "SimData Tracks");
@@ -141,6 +142,7 @@ void tracker_OM_adjacent() {
         int entryno = elist->GetEntry(i);
         tree->GetEntry(entryno);
 
+        if (calohits < 4) {continue;}
         if (trackercolumn->size() < 4) {continue;}
 
         for (int j=0; j<calohits; j++) {          //for each hit calorimeter j
@@ -148,13 +150,13 @@ void tracker_OM_adjacent() {
             float tcol_min = tab_column.at(col) - 4.; 
             float tcol_max = tab_column.at(col) + 4.;
 
+            vector<vector<int>> track = {};
+
             hit_caloid = (13*col) + (260*caloside->at(j)) + calorow->at(j);          
-            hit_energy = (charge->at(j))*calib[hit_caloid]*(-1./1000.);             //changed to MeV and flipped sign
+            hit_energy = (charge->at(j))*calib[hit_caloid]*(-1./4194.304);             //changed to MeV and flipped sign
             if (hit_energy < 0.3) {continue;}          
 
             if (hit_caloid == 123) {spectrum->Fill(hit_energy);}                //record energies at specific OM 
-
-            vector<vector<int>> *track = new vector<vector<int>>;
 
             for (int k=0; k<trackercolumn->size(); k++) {
                 if (trackerside->at(k) != caloside->at(j)) {continue;}          //check same side
@@ -165,39 +167,39 @@ void tracker_OM_adjacent() {
                 int tside = trackerside->at(k);
 
                 if (tcol <= tcol_max && tcol >= tcol_min) {              
-                    track->push_back({tside, tcol, tlayer});                                      
+                    track.push_back({tside, tcol, tlayer});
                 }
             
             //loop again to reconstruct then save 
-            if (track->size() == 0) {continue;}
+            if (track.size() == 0) {continue;}
             while (true == true) {
-                int pre_size = track->size();
-                for (int l=0; l<track->size();l++) {
+                int pre_size = track.size();
+                for (int l=0; l<track.size();l++) {
                     for (int m=0;m<trackercolumn->size();m++) {
                         vector<int> next_tracker = {trackerside->at(m), trackercolumn->at(m), trackerlayer->at(m)};
                         
                         bool dupe = 0;                                      //check not already in track vector
-                        for (int n=0;n<track->size();n++) {
-                            if (next_tracker == track->at(n)) {dupe = 1;}
+                        for (int n=0;n<track.size();n++) {
+                            if (next_tracker == track.at(n)) {dupe = 1;}
                         }
                         if (dupe == 1) {continue;}
 
-                        if (within_two(track->at(l), next_tracker)) {       //append to track vector if within 2x2 box
-                            track->push_back(next_tracker);               
+                        if (within_two(track.at(l), next_tracker)) {       //append to track vector if within 2x2 box
+                            track.push_back(next_tracker);               
                         }
                     }
                 }
-                if (pre_size == track->size()) {break;}
+                if (pre_size == track.size()) {break;}
             }
 
-            if (track->size() > 3) {                        //save as "good" event if track length > 3 
+            if (track.size() > 3) {                        //save as "good" event if track length > 3 
                 hitentry = good_events;
                 good_events += 1;
 
                 hit_eventid = event;
                 hit_time = timestamp->at(j);
 
-                hit_track = track;                           //add this to outtree
+                hit_track = &track;                           //add this to outtree
                 outtree->Fill();
                 }
             }
