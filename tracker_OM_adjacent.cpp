@@ -52,6 +52,9 @@ void tracker_OM_adjacent() {
     TFile *f = new TFile("snemo_run-1166_udd.root", "READ");
     TTree *tree = (TTree*)f->Get("SimData");
 
+    gInterpreter->GenerateDictionary("vector<vector<int> >","vector");          //trying this
+    gInterpreter->GenerateDictionary("vector<vector<long> >","vector");
+
     int event = 0;
     int calohits = 0;
     int trackerhits = 0;
@@ -96,6 +99,10 @@ void tracker_OM_adjacent() {
     tree->SetBranchStatus("digitracker.layer", 1);
     tree->SetBranchAddress("digitracker.layer", &trackerlayer);
 
+    std::vector<vector<long>> *anode_R0 = new std::vector<vector<long>>;
+    tree->SetBranchStatus("digitracker.anodetimestampR0", 1);
+    tree->SetBranchAddress("digitracker.anodetimestampR0", &anode_R0);
+
     
     //get cut of events with a calorimeter hit, maybe add tracker cells > 3
     TCut cut_calohit = "digicalo.nohits > 3";    //pairing
@@ -114,7 +121,6 @@ void tracker_OM_adjacent() {
     double hit_energy = 0;
     long hit_time = 0;
 
-    gInterpreter->GenerateDictionary("vector<vector<int> >","vector");          //trying this
     vector<vector<int>> *hit_track = new vector<vector<int>>;
     outtree->Branch("entry", &hitentry, "hitentry/I");
     outtree->Branch("hit_event_id", &hit_eventid, "hit_eventid/I");
@@ -137,11 +143,12 @@ void tracker_OM_adjacent() {
 
     //check specific calorimeter for energy spectrum
     TH1D *spectrum = new TH1D("spectrum", "Energies for given OM", 100, 0, 10);
+    TH1D *time = new TH1D("time", "OM to tracker delta_t", 100, -20, 100);
 
     //check calorimeters for nearby active tracker cells
     int good_events = 0;
 
-    for (int i=0; i < 10000; i++) {
+    for (int i=0; i < totalentries; i++) {
         int entryno = elist->GetEntry(i);
         tree->GetEntry(entryno);
 
@@ -173,6 +180,11 @@ void tracker_OM_adjacent() {
 
                 if (tcol <= tcol_max && tcol >= tcol_min) {              
                     track->push_back({tside, tcol, tlayer});
+
+                    //TODO: check time correlation, need to find out why R0 is vector<vector<long>>?
+                    long delta_t = (2*anode_R0->at(k).at(0) - timestamp->at(j))*6.25/1000;
+                    time->Fill(delta_t);
+
                     break;
                 }
             }
@@ -219,6 +231,8 @@ void tracker_OM_adjacent() {
     outtree->Write();
     cout << "Adjacent events: " << good_events << "\n";
     spectrum->SetTitle("Energy spectrum for specific OM;Energy (MeV);Count");
-    spectrum->Draw();
+    //spectrum->Draw();
+
+    time->Draw();
 
 }
