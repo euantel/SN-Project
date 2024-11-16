@@ -34,8 +34,7 @@ using namespace std;
 /* checks for events with >= 1 active calorimeter and and adjacent 
 layer 8 or 9 tracker hit
 
-om id = 260*side + column*13 + row
-tracker id = side + column*9 + layer           (maybe wrong)
+
 */
 
 bool within_two(vector<int> a, vector<int> b) {
@@ -133,6 +132,7 @@ void tracker_OM_adjacent() {
     vector<double> tab_column = {0.8, 6.8, 12.5, 18.2, 24.2, 29.9, 35.9, 41.8, 46.7, 53.6, 59.4, 65.3, 71.1, 77, 83.1, 88.8, 94.8, 100.6, 106.4, 112.2};
 
     //input charge-energy calibration from text
+    double energy_conv = -1./4194.304;
     vector<double> calib;
     ifstream calib_file("run-1351_fee-charge-to-energy.txt");
     int n1;
@@ -143,7 +143,7 @@ void tracker_OM_adjacent() {
 
     //check specific calorimeter for energy spectrum
     TH1D *spectrum = new TH1D("spectrum", "Energies for given OM", 100, 0, 10);
-    TH1D *time = new TH1D("time", "OM to tracker delta_t", 100, -20, 100);
+    TH1D *timehist = new TH1D("time", "OM to tracker delta_t", 120, -20, 100);
 
     //check calorimeters for nearby active tracker cells
     int good_events = 0;
@@ -165,7 +165,7 @@ void tracker_OM_adjacent() {
             vector<vector<int>> *track = new vector<vector<int>>;
 
             hit_caloid = (13*col) + (260*caloside->at(j)) + calorow->at(j);          
-            hit_energy = (charge->at(j))*calib[hit_caloid]*(-1./4194.304);             //changed to MeV and flipped sign
+            hit_energy = (charge->at(j))*calib[hit_caloid]*energy_conv;             //changed to MeV and flipped sign
             if (hit_energy < 0.3) {continue;}          
 
             if (hit_caloid == 123) {spectrum->Fill(hit_energy);}                //record energies at specific OM 
@@ -174,17 +174,17 @@ void tracker_OM_adjacent() {
                 if (trackerside->at(k) != caloside->at(j)) {continue;}          //check same side
                 if (trackerlayer->at(k) < 7) {continue;}                        //check layer 8 or 9
 
+                long delta_t = (2*anode_R0->at(k).at(0) - timestamp->at(j))*6.25/1000.;         //microseconds
+                timehist->Fill(delta_t);
+
+                if (delta_t < 0.2 || delta_t > 50) {continue;}                                  //time cut 
+
                 int tcol = trackercolumn->at(k);
                 int tlayer = trackerlayer->at(k);
                 int tside = trackerside->at(k);
 
                 if (tcol <= tcol_max && tcol >= tcol_min) {              
                     track->push_back({tside, tcol, tlayer});
-
-                    //TODO: check time correlation, need to find out why R0 is vector<vector<long>>?
-                    long delta_t = (2*anode_R0->at(k).at(0) - timestamp->at(j))*6.25/1000;
-                    time->Fill(delta_t);
-
                     break;
                 }
             }
@@ -217,7 +217,7 @@ void tracker_OM_adjacent() {
                         hit_eventid = event;
                         hit_time = timestamp->at(j);
 
-                        hit_track = track;                           //add this to outtree
+                        hit_track = track;                          //add this to outtree
                         outtree->Fill();
                     }
 
@@ -230,9 +230,13 @@ void tracker_OM_adjacent() {
     out->cd();
     outtree->Write();
     cout << "Adjacent events: " << good_events << "\n";
-    spectrum->SetTitle("Energy spectrum for specific OM;Energy (MeV);Count");
-    //spectrum->Draw();
 
-    time->Draw();
+    spectrum->SetTitle("Energy spectrum for specific OM;Energy (MeV);Count");
+    timehist->SetTitle("Time difference between OM and adj tracker;delta_t (us);Count");
+    spectrum->Write();
+    timehist->Write();
+
+    //spectrum->Draw();
+    timehist->Draw();
 
 }
