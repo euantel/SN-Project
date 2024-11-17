@@ -178,7 +178,7 @@ void tracker_OM_adjacent() {
 
     int cut_calohits = 0, cut_e_energy = 0, cut_OM_deltat = 0;
 
-    for (int i=0; i < totalentries/10; i++) {
+    for (int i=0; i < totalentries; i++) {
         tree->GetEntry(i);
 
         if (calohits < 4 && flag_cut_calohits == 1) {continue;}
@@ -301,6 +301,16 @@ void tracker_OM_adjacent() {
     cout << "Events with -0.2 < dt < 50us: \t" << cut_OM_deltat << "\n";
     cout << "Events with track length > 3: \t" << good_events << "\n";
 
+    //quick text output to file 
+    ofstream outtxt;
+    outtxt.open("cuts.txt");
+    outtxt << "Initial events: \t\t" << totalentries << "\n";
+    outtxt << "Events with 4+ OM hits: \t" << cut_calohits << "\n";
+    outtxt << "Events with > 0.3MeV hits: \t" << cut_e_energy << "\n";
+    outtxt << "Events with -0.2 < dt < 50us: \t" << cut_OM_deltat << "\n";
+    outtxt << "Events with track length > 3: \t" << good_events << "\n";
+    outtxt.close();
+
     spectrum->SetTitle("Energy spectrum for specific OM;Energy (MeV);Count");
     timehist->SetTitle("Time difference between OM and adj tracker;delta_t (us);Count");
     spectrum->Write();
@@ -370,13 +380,15 @@ void find_gammas() {
 
     int events_found = 0;
 
+    TH1D *gamma_spectrum = new TH1D("gamma_energies", "Gamma Energies", 140, 0, 7);
+
     //loop through both and match up timestamps 
     for (int i=0; i<electrons->GetEntries(); i++) {
         electrons->GetEntry(i);
 
-        if (i % 100 == 0) {cout << i << "\n";}
-        if (i == 1000) {break;}                     //temporary break for testing
+        if (i % 1000 == 0) {cout << i << "\n";}
 
+        //using entrylist seems faster than looping for comparison
         TString cutstring = TString::Format("event_id == %d", e_eventid);
 
         gammas->Draw(">>elist", cutstring, "entrylist");
@@ -412,6 +424,7 @@ void find_gammas() {
             out_events->Fill();
 
             events_found += 1;
+            gamma_spectrum->Fill(g_energy);
 
             //break;                     //will only take one from each for now
         }
@@ -419,5 +432,7 @@ void find_gammas() {
 
     out->cd();
     out_events->Write();
+    gamma_spectrum->SetTitle("Energies of Correlated Gammas;E (MeV);Count");
+    gamma_spectrum->Write();
     cout << "Electron + Gamma-like events: " << events_found << "\n";
 }
