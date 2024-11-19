@@ -181,7 +181,7 @@ void tracker_OM_adjacent() {
     for (int i=0; i < totalentries; i++) {
         tree->GetEntry(i);
 
-        if (calohits < 4 && flag_cut_calohits == 1) {continue;}
+        if (calohits != 4 && flag_cut_calohits == 1) {continue;}
         cut_calohits += 1;
 
         //to avoid overcounting tracks in the same event
@@ -386,24 +386,25 @@ void find_gammas() {
     for (int i=0; i<electrons->GetEntries(); i++) {
         electrons->GetEntry(i);
 
-        if (i % 1000 == 0) {cout << i << "\n";}
-
+        if (i % 250 == 0) {cout << i << "\n";}
+        if (i == 25000) {break;}                                         //break for testing
+        
         //using entrylist seems faster than looping for comparison
         TString cutstring = TString::Format("event_id == %d", e_eventid);
 
         gammas->Draw(">>elist", cutstring, "entrylist");
         TEntryList *elist = (TEntryList*)gDirectory->Get("elist");
         int matches = elist->GetN();
+        
 
         for (int j=0; j<matches; j++) {
             gammas->GetEntry(elist->GetEntry(j));
-
+            
             e_OM->clear();
             g_OM->clear();
             
-            if (g_eventid != e_eventid) {continue;} 
+            if (e_calocol == g_calocol) {continue;}                     //avoid same column for now 
             if (abs(6.25*(e_time - g_time)) > 50) {continue;}           //enforce time correlation 50ns
-            if (e_calocol == g_calocol) {continue;}                     //avoid same column for now
 
             //discard adjacent OM hits
             if (within_x({e_caloside, e_calorow, e_calocol}, {g_caloside, g_calorow, g_calocol}, 1)) {continue;}
@@ -426,7 +427,7 @@ void find_gammas() {
             events_found += 1;
             gamma_spectrum->Fill(g_energy);
 
-            //break;                     //will only take one from each for now
+            break;                     //will only take one from each for now
         }
     }
 
