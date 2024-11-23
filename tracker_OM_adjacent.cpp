@@ -117,37 +117,46 @@ void tracker_OM_adjacent() {
     //create outfile and tree for particle tracks
     TFile *out = new TFile("tracks.root", "RECREATE");
     TTree *outtree = new TTree("tracks", "SimData Tracks");
-    int hitentry = 0;
-    int hit_eventid = 0;
-    int hit_caloid = 0, hit_caloside = 0, hit_calorow = 0, hit_calocol = 0;
-    double hit_energy = 0;
-    long hit_time = 0;
+    int e_hit_caloid = 0, gamma_caloid;
+    double e_hit_energy, gamma_energy = 0;
+    long e_hit_time = 0, gamma_timestamp = 0;
+    vector<int> *hit_track = new vector<int>;                         //vector of IDs
 
-    vector<vector<int>> *hit_track = new vector<vector<int>>;
-    outtree->Branch("entry", &hitentry, "hitentry/I");
-    outtree->Branch("hit_event_id", &hit_eventid, "hit_eventid/I");
-    outtree->Branch("hit_timestamp", &hit_time);
-    outtree->Branch("hit_energy", &hit_energy, "hit_energy/D");
-    outtree->Branch("hit_calo_id", &hit_caloid, "hit_caloid/I");
-    outtree->Branch("hit_calo_side", &hit_caloside, "hit_caloside/I");
-    outtree->Branch("hit_calo_row", &hit_calorow, "hit_calorow/I");
-    outtree->Branch("hit_calo_column", &hit_calocol, "hit_calocol/I");
-    outtree->Branch("hit_track", &hit_track);
+    //FLAGS                                
+    bool flag_cut_calohits = 0;             //enforce 2 calo hits (4 due to pairing)
+    bool flag_cut_tracklength = 0;          //enforce electron track length 4+ cells
+    bool flag_cut_e_energy = 0;             //enforce electron energy > 0.3 MeV
+    bool flag_cut_OM_delta_t = 0;           //enforce OM-tracker time difference of -0.2 to 50 us
 
-    //out TTree for possible gammas, may integrate into main code at some point
-    TTree *gammas = new TTree("gammas", "Gamma-like events");
-    int g_event = 0;
-    double gamma_energy = 0;
-    int gamma_caloid = 0;
-    int gamma_caloside = 0, gamma_calorow = 0, gamma_calocol = 0;
-    long gamma_timestamp = 0;
-    gammas->Branch("event_id", &g_event, "g_event/I");
-    gammas->Branch("gamma_energy", &gamma_energy, "gamma_energy/D");
-    gammas->Branch("gamma_timestamp", &gamma_timestamp, "gamma_timestamp/L");
-    gammas->Branch("gamma_caloid", &gamma_caloid, "gamma_caloid/I");
-    gammas->Branch("gamma_caloside", &gamma_caloside, "gamma_caloside/I");
-    gammas->Branch("gamma_calorow", &gamma_calorow, "gamma_calorow/I");
-    gammas->Branch("gamma_calocol", &gamma_calocol, "gamma_calocol/I");
+    //re-saving data from original events 
+    outtree->Branch("header.eventnumber", &event);
+    outtree->Branch("digicalo.nohits", &calohits);
+    outtree->Branch("digicalo.side", &caloside);
+    outtree->Branch("digicalo.column", &calocolumn);
+    outtree->Branch("digicalo.row", &calorow);
+    outtree->Branch("digicalo.timestamp", &timestamp);
+    outtree->Branch("digicalo.charge", &charge);
+    outtree->Branch("digicalo.wall", &wall);
+    outtree->Branch("digitracker.nohits", &trackerhits);
+    outtree->Branch("digitracker.side", &trackerside);
+    outtree->Branch("digitracker.column", &trackercolumn);
+    outtree->Branch("digitracker.layer", &trackerlayer);
+    outtree->Branch("digitracker.anodetimestampR0", &anode_R0);
+
+    //cut flags, 0 = failed cut 
+    outtree->Branch("pass_cut_calohits", &flag_cut_calohits, "flag_cut_calohits/O");
+    outtree->Branch("pass_cut_energy", &flag_cut_e_energy, "flag_cut_e_energy/O");
+    outtree->Branch("pass_cut_tracklength", &flag_cut_tracklength, "flag_cut_tracklength/O");
+    outtree->Branch("pass_cut_OM_delta_t", &flag_cut_OM_delta_t, "flag_cut_OM_delta_t/O");
+
+    //additional data 
+    outtree->Branch("e_hit_timestamp", &e_hit_time);
+    outtree->Branch("e_hit_energy", &e_hit_energy, "hit_energy/D");
+    outtree->Branch("e_hit_calo_id", &e_hit_caloid, "hit_caloid/I");
+    outtree->Branch("e_hit_track", &hit_track);
+    outtree->Branch("gamma_timestamp", &gamma_timestamp, "gamma_timestamp/L");
+    outtree->Branch("gamma_energy", &gamma_energy, "gamma_energy/D");
+    outtree->Branch("gamma_caloid", &gamma_caloid, "gamma_caloid/I");
 
     //comparison vector, +- 4 inclusive gives tracker columns 
     vector<double> tab_column = {0.8, 6.8, 12.5, 18.2, 24.2, 29.9, 35.9, 41.8, 46.7, 53.6, 59.4, 65.3, 71.1, 77, 83.1, 88.8, 94.8, 100.6, 106.4, 112.2};
@@ -168,45 +177,50 @@ void tracker_OM_adjacent() {
 
     int good_events = 0;
     int totalentries = tree->GetEntries();
-
-    //FLAGS                                
-    bool flag_cut_calohits = 1;             //enforce 2 calo hits (4 due to pairing)
-    bool flag_cut_tracklength = 1;          //enforce electron track length 4+ cells
-    bool flag_cut_e_energy = 1;             //enforce electron energy > 0.3 MeV
-    bool flag_cut_OM_delta_t = 1;           //enforce OM-tracker time difference of -0.2 to 50 us
-    bool flag_track_recon = 1;              //reconstruct tracks and save 
-
     int cut_calohits = 0, cut_e_energy = 0, cut_OM_deltat = 0;
 
-    for (int i=0; i < totalentries; i++) {
+    for (int i=0; i < totalentries/10; i++) {
         tree->GetEntry(i);
 
-        if (calohits != 4 && flag_cut_calohits == 1) {continue;}
-        cut_calohits += 1;
+        //set default values
+        e_hit_time = -1;
+        e_hit_energy = -1;
+        e_hit_caloid = -1;
+        hit_track->clear();
+        gamma_timestamp = -1;
+        gamma_energy = -1;
+        gamma_caloid = -1;
+        flag_cut_calohits = 0;
+        flag_cut_e_energy = 0;
+        flag_cut_OM_delta_t = 0;
+        flag_cut_tracklength = 0;
 
-        //to avoid overcounting tracks in the same event
-        bool cut_energy = 0, cut_t = 0;
+        if (calohits == 4) {
+            flag_cut_calohits = 1;   //passed first cut
+        } else {
+            outtree->Fill();
+            continue;
+        }
 
         for (int j=0; j<calohits; j++) {            //for each hit calorimeter j
-            //if (wall->at(j) != -1) {continue;}      //main wall only?
+            if (wall->at(j) != -1) {continue;}      //main wall only?
 
             int col = calocolumn->at(j); 
             float tcol_min = tab_column.at(col) - 4.; 
             float tcol_max = tab_column.at(col) + 4.;
 
             vector<vector<int>> *track = new vector<vector<int>>;
+            track->clear();
 
             bool adj_tracker = 0;
 
-            hit_calocol = col;
-            hit_caloside = caloside->at(j);
-            hit_calorow = calorow->at(j);
-            hit_caloid = (13*col) + (260*caloside->at(j)) + calorow->at(j);          
-            hit_energy = (charge->at(j))*calib[hit_caloid]*energy_conv;             //changed to MeV and flipped sign
-            if (hit_energy < 0.3 && flag_cut_e_energy == 1) {continue;} 
-            if (cut_energy == 0) {
-                cut_e_energy += 1;
-                cut_energy = 1;
+            int hit_caloid = (13*col) + (260*caloside->at(j)) + calorow->at(j);          
+            double hit_energy = (charge->at(j))*calib[hit_caloid]*energy_conv;             //changed to MeV and flipped sign
+
+            if (hit_energy > 0.3) {         //energy cut
+                flag_cut_e_energy = 1;
+            } else {
+                continue;
             }
 
             if (hit_caloid == 123) {spectrum->Fill(hit_energy);}                //record energies at specific OM 
@@ -224,10 +238,8 @@ void tracker_OM_adjacent() {
                     long delta_t = (2.*anode_R0->at(k).at(0) - timestamp->at(j))*6.25/1000.;         //microseconds
                     timehist->Fill(delta_t);
 
-                    if ((delta_t < -0.2 || delta_t > 50) && flag_cut_OM_delta_t == 1) {continue;}    //time cut 
-                    if (cut_t == 0) {
-                        cut_OM_deltat += 1;
-                        cut_t = 1; 
+                    if ((delta_t > -0.2 && delta_t < 50)) {     //time cut 
+                        flag_cut_OM_delta_t = 1;
                     }
 
                     track->push_back({tside, tcol, tlayer});
@@ -237,15 +249,10 @@ void tracker_OM_adjacent() {
             }
 
             if (adj_tracker == 0) {
-                //record possible gamma hits (for now just any hit with no time correlated adjacent track)
-                g_event = i;
+                //record possible gamma hits (for now just any hit with no time correlated adjacent track
                 gamma_energy = hit_energy;
                 gamma_caloid = hit_caloid;
-                gamma_caloside = hit_caloside;
-                gamma_calorow = hit_calorow;
-                gamma_calocol = hit_calocol; 
                 gamma_timestamp = timestamp->at(j);
-                gammas->Fill();
                 }
 
             //loop again to reconstruct then save 
@@ -253,7 +260,6 @@ void tracker_OM_adjacent() {
             while (true == true) {
                 int pre_size = track->size();
                 for (int l=0; l<track->size();l++) {
-                    if (flag_track_recon == 0) {break;}
                     for (int m=0;m<trackercolumn->size();m++) {
                         vector<int> next_tracker = {trackerside->at(m), trackercolumn->at(m), trackerlayer->at(m)};
                         
@@ -270,33 +276,35 @@ void tracker_OM_adjacent() {
                 }
 
                 if (pre_size == track->size()) {
-                    if (track->size() > 3 || flag_track_recon == 0 || flag_cut_tracklength == 0) {
+                    e_hit_time = timestamp->at(j);
+                    e_hit_energy = hit_energy;
+                    e_hit_caloid = hit_caloid;
 
-                        hitentry = good_events;
-                        good_events += 1;
-
-                        hit_eventid = event;
-                        hit_time = timestamp->at(j);
-
-                        hit_track = track;                          //add this to outtree
-                        outtree->Fill();
-
-                        track->clear();
+                    for (int p = 0; p<track->size(); p++) {
+                        hit_track->push_back(track->at(p).at(0)*1017 + track->at(p).at(1)*9 + track->at(p).at(2));
                     }
 
                     break; 
                 }
             }
         }
+
+        if (hit_track->size() > 3) {
+            flag_cut_tracklength = 1;
+            good_events += 1;
+            }
+        if (flag_cut_calohits == 1) {cut_calohits += 1;}
+        if (flag_cut_e_energy == 1) {cut_e_energy += 1;}
+        if (flag_cut_OM_delta_t == 1) {cut_OM_deltat += 1;}
+        outtree->Fill();
     }
 
     out->cd();
     outtree->Write();
-    gammas->Write();
 
     //output number of events cut, some events may have multiple recorded tracks 
-    cout << "Initial events: \t\t" << totalentries << "\n";
-    cout << "Events with 4+ OM hits: \t" << cut_calohits << "\n";
+    cout << "Initial events: \t\t" << totalentries/10 << "\n";
+    cout << "Events with 4 OM hits: \t\t" << cut_calohits << "\n";
     cout << "Events with > 0.3MeV hits: \t" << cut_e_energy << "\n";
     cout << "Events with -0.2 < dt < 50us: \t" << cut_OM_deltat << "\n";
     cout << "Events with track length > 3: \t" << good_events << "\n";
