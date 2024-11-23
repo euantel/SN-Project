@@ -31,10 +31,14 @@
 #include <TPaletteAxis.h>
 using namespace std;
 
-/* checks for events with >= 1 active calorimeter and and adjacent 
-layer 8 or 9 tracker hit
+/* 
+checks a given file for electron+gamma like events
+electron and gamma are time correlated by < 50ns 
 
+records OM location/energy/timestamp for both at a given event
+and records basic track reconstruction of electron
 
+E. Telfer 2024
 */
 
 bool within_x(vector<int> a, vector<int> b, int x) {
@@ -51,7 +55,7 @@ void tracker_OM_adjacent() {
     TFile *f = new TFile("snemo_run-1166_udd.root", "READ");
     TTree *tree = (TTree*)f->Get("SimData");
 
-    gInterpreter->GenerateDictionary("vector<vector<int>>","vector");          //trying this
+    gInterpreter->GenerateDictionary("vector<vector<int>>","vector");          //seems to fix 2D vectors
     gInterpreter->GenerateDictionary("vector<vector<long>>","vector");
 
     int event = 0;
@@ -127,6 +131,7 @@ void tracker_OM_adjacent() {
     bool flag_cut_tracklength = 0;          //enforce electron track length 4+ cells
     bool flag_cut_e_energy = 0;             //enforce electron energy > 0.3 MeV
     bool flag_cut_OM_delta_t = 0;           //enforce OM-tracker time difference of -0.2 to 50 us
+    bool flag_e_g_correlated = 0;           //time correlation between electron and gamma-like hits
 
     //re-saving data from original events 
     outtree->Branch("header.eventnumber", &event);
@@ -148,6 +153,7 @@ void tracker_OM_adjacent() {
     outtree->Branch("pass_cut_energy", &flag_cut_e_energy, "flag_cut_e_energy/O");
     outtree->Branch("pass_cut_tracklength", &flag_cut_tracklength, "flag_cut_tracklength/O");
     outtree->Branch("pass_cut_OM_delta_t", &flag_cut_OM_delta_t, "flag_cut_OM_delta_t/O");
+    outtree->Branch("electron_gamma_correlated", &flag_e_g_correlated, "flag_e_g_correlated/O");
 
     //additional data 
     outtree->Branch("e_hit_timestamp", &e_hit_time);
@@ -174,10 +180,11 @@ void tracker_OM_adjacent() {
     //check specific calorimeter for energy spectrum
     TH1D *spectrum = new TH1D("spectrum", "Energies for given OM", 100, 0, 10);
     TH1D *timehist = new TH1D("time", "OM to tracker delta_t", 120, -20, 100);
+    TH1D *gamma_spectrum = new TH1D("gamma_energies", "Gamma Energies", 140, 0, 7);
 
     int good_events = 0;
     int totalentries = tree->GetEntries();
-    int cut_calohits = 0, cut_e_energy = 0, cut_OM_deltat = 0;
+    int cut_calohits = 0, cut_e_energy = 0, cut_OM_deltat = 0, cut_correlated = 0;
 
     for (int i=0; i < totalentries/10; i++) {
         tree->GetEntry(i);
@@ -194,6 +201,11 @@ void tracker_OM_adjacent() {
         flag_cut_e_energy = 0;
         flag_cut_OM_delta_t = 0;
         flag_cut_tracklength = 0;
+        flag_e_g_correlated = 0;
+
+        //temporary locations for time correlation
+        int e_side = 0, e_row = 0, e_col = 0;
+        int g_side = 0, g_row = 0, g_col = 0;
 
         if (calohits == 4) {
             flag_cut_calohits = 1;   //passed first cut
@@ -253,6 +265,10 @@ void tracker_OM_adjacent() {
                 gamma_energy = hit_energy;
                 gamma_caloid = hit_caloid;
                 gamma_timestamp = timestamp->at(j);
+
+                g_side = caloside->at(j);
+                g_row = calorow->at(j);
+                g_col = calocolumn->at(j);
                 }
 
             //loop again to reconstruct then save 
@@ -275,16 +291,20 @@ void tracker_OM_adjacent() {
                     }
                 }
 
-                if (pre_size == track->size()) {
+                if (pre_size == track->size()) {        //stop reconstruction if not changing anymore
                     e_hit_time = timestamp->at(j);
                     e_hit_energy = hit_energy;
                     e_hit_caloid = hit_caloid;
+
+                    e_side = caloside->at(j);
+                    e_row = calorow->at(j);
+                    e_col = calocolumn->at(j);
 
                     for (int p = 0; p<track->size(); p++) {
                         hit_track->push_back(track->at(p).at(0)*1017 + track->at(p).at(1)*9 + track->at(p).at(2));
                     }
 
-                    break; 
+                    break;  
                 }
             }
         }
@@ -293,9 +313,23 @@ void tracker_OM_adjacent() {
             flag_cut_tracklength = 1;
             good_events += 1;
             }
-        if (flag_cut_calohits == 1) {cut_calohits += 1;}
+        if (flag_cut_calohits == 1) {cut_calohits += 1;}        //counting events after each cut
         if (flag_cut_e_energy == 1) {cut_e_energy += 1;}
         if (flag_cut_OM_delta_t == 1) {cut_OM_deltat += 1;}
+
+        //add electron-gamma correlation here?
+        if (flag_cut_calohits && flag_cut_e_energy && flag_cut_e_energy && flag_cut_tracklength) {
+            //check for adjacency or same column
+            if (within_x({e_side, e_row, e_col}, {g_side, g_row, g_col}, 1) == 0 && e_col != g_col) {
+                //enforce time correlation 
+                if (abs(6.25*(e_hit_time - gamma_timestamp)) < 50) {
+                    flag_e_g_correlated = 1; 
+                    cut_correlated += 1;
+                    gamma_spectrum->Fill(gamma_energy);
+                }
+            }
+        }
+
         outtree->Fill();
     }
 
@@ -308,140 +342,28 @@ void tracker_OM_adjacent() {
     cout << "Events with > 0.3MeV hits: \t" << cut_e_energy << "\n";
     cout << "Events with -0.2 < dt < 50us: \t" << cut_OM_deltat << "\n";
     cout << "Events with track length > 3: \t" << good_events << "\n";
+    cout << "Correlated electron and gamma:\t" << cut_correlated << "\n";
 
     //quick text output to file 
     ofstream outtxt;
     outtxt.open("cuts.txt");
-    outtxt << "Initial events: \t\t" << totalentries << "\n";
-    outtxt << "Events with 4+ OM hits: \t" << cut_calohits << "\n";
-    outtxt << "Events with > 0.3MeV hits: \t" << cut_e_energy << "\n";
-    outtxt << "Events with -0.2 < dt < 50us: \t" << cut_OM_deltat << "\n";
-    outtxt << "Events with track length > 3: \t" << good_events << "\n";
+    outtxt << "Initial events:                " << totalentries << "\n";
+    outtxt << "Events with 4+ OM hits:        " << cut_calohits << "\n";
+    outtxt << "Events with > 0.3MeV hits:     " << cut_e_energy << "\n";
+    outtxt << "Events with -0.2 < dt < 50us:  " << cut_OM_deltat << "\n";
+    outtxt << "Events with track length > 3:  " << good_events << "\n";
+    outtxt << "Correlated electron and gamma: " << cut_correlated << "\n";
     outtxt.close();
 
     spectrum->SetTitle("Energy spectrum for specific OM;Energy (MeV);Count");
     timehist->SetTitle("Time difference between OM and adj tracker;delta_t (us);Count");
+    gamma_spectrum->SetTitle("Energies of Correlated Gammas;E (MeV);Count");
     spectrum->Write();
     timehist->Write();
+    gamma_spectrum->Write();
 
+    gamma_spectrum->Draw();
     //spectrum->Draw();
     //timehist->Draw();
 
-}
-
-void find_gammas() {
-    /*
-    
-    trying gamma stuff here, to be ran after the main macro
-    look for events with an electron-like track and OM hit within 50ns
-    match-up then save to a new file
-    
-    */
-
-    gInterpreter->GenerateDictionary("vector<vector<int>>","vector"); 
-
-    //get trees from tracks file 
-    TFile *g = new TFile("tracks.root", "READ");
-    TTree *gammas = (TTree*)g->Get("gammas");
-    int g_eventid = 0, g_caloside = 0, g_calorow = 0, g_calocol = 0;
-    Long64_t g_time = 0;
-    double g_energy = 0;
-    gammas->SetBranchAddress("event_id", &g_eventid);
-    gammas->SetBranchAddress("gamma_timestamp", &g_time);
-    gammas->SetBranchAddress("gamma_energy", &g_energy);
-    gammas->SetBranchAddress("gamma_caloside", &g_caloside);
-    gammas->SetBranchAddress("gamma_calorow", &g_calorow);
-    gammas->SetBranchAddress("gamma_calocol", &g_calocol);
-
-    TTree *electrons = (TTree*)g->Get("tracks");
-    int e_eventid = 0, e_caloside = 0, e_calorow = 0, e_calocol = 0;
-    long e_time = 0;
-    double e_energy = 0;
-    vector<vector<int>> *e_track = new vector<vector<int>>;
-    electrons->SetBranchAddress("hit_event_id", &e_eventid);
-    electrons->SetBranchAddress("hit_timestamp", &e_time);
-    electrons->SetBranchAddress("hit_energy", &e_energy);
-    electrons->SetBranchAddress("hit_calo_side", &e_caloside);
-    electrons->SetBranchAddress("hit_calo_row", &e_calorow);
-    electrons->SetBranchAddress("hit_calo_column", &e_calocol);
-    electrons->SetBranchAddress("hit_track", &e_track);
-
-    //output seperate file for now
-    TFile *out = new TFile("e_gamma_events.root", "RECREATE");
-    TTree *out_events = new TTree("e_gammas", "Correlated electron + gammas");
-
-    int out_eventid = 0 ;
-    vector<int> *e_OM = new vector<int>;
-    vector<int> *g_OM = new vector<int>;
-    double out_e_energy = 0, out_g_energy = 0;
-    long out_e_time = 0, out_g_time = 0;
-    vector<vector<int>> *out_e_track = new vector<vector<int>>;
-
-    out_events->Branch("eventID", &out_eventid, "out_eventid/I");
-    out_events->Branch("electron_OM", &e_OM);
-    out_events->Branch("gamma_OM", &g_OM);
-    out_events->Branch("electron_energy", &out_e_energy, "out_e_energy/D");
-    out_events->Branch("electron_timestamp", &out_e_time);
-    out_events->Branch("gamma_energy", &out_g_energy, "out_g_energy/D");
-    out_events->Branch("gamma_timestamp", &out_g_time);
-    out_events->Branch("electron_track", &out_e_track);
-
-    int events_found = 0;
-
-    TH1D *gamma_spectrum = new TH1D("gamma_energies", "Gamma Energies", 140, 0, 7);
-
-    //loop through both and match up timestamps 
-    for (int i=0; i<electrons->GetEntries(); i++) {
-        electrons->GetEntry(i);
-
-        if (i % 250 == 0) {cout << i << "\n";}
-        if (i == 25000) {break;}                                         //break for testing
-        
-        //using entrylist seems faster than looping for comparison
-        TString cutstring = TString::Format("event_id == %d", e_eventid);
-
-        gammas->Draw(">>elist", cutstring, "entrylist");
-        TEntryList *elist = (TEntryList*)gDirectory->Get("elist");
-        int matches = elist->GetN();
-        
-
-        for (int j=0; j<matches; j++) {
-            gammas->GetEntry(elist->GetEntry(j));
-            
-            e_OM->clear();
-            g_OM->clear();
-            
-            if (e_calocol == g_calocol) {continue;}                     //avoid same column for now 
-            if (abs(6.25*(e_time - g_time)) > 50) {continue;}           //enforce time correlation 50ns
-
-            //discard adjacent OM hits
-            if (within_x({e_caloside, e_calorow, e_calocol}, {g_caloside, g_calorow, g_calocol}, 1)) {continue;}
-
-            //record events that pass the cuts
-            out_eventid = e_eventid;
-            e_OM->push_back(e_caloside);
-            e_OM->push_back(e_calorow);
-            e_OM->push_back(e_calocol);
-            g_OM->push_back(g_caloside);
-            g_OM->push_back(g_calorow);
-            g_OM->push_back(g_calocol);
-            out_e_energy = e_energy;
-            out_e_time = e_time;
-            out_g_energy = g_energy;
-            out_g_time = g_time;
-            out_e_track = e_track;
-            out_events->Fill();
-
-            events_found += 1;
-            gamma_spectrum->Fill(g_energy);
-
-            break;                     //will only take one from each for now
-        }
-    }
-
-    out->cd();
-    out_events->Write();
-    gamma_spectrum->SetTitle("Energies of Correlated Gammas;E (MeV);Count");
-    gamma_spectrum->Write();
-    cout << "Electron + Gamma-like events: " << events_found << "\n";
 }
