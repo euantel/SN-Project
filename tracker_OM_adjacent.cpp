@@ -177,6 +177,10 @@ void tracker_OM_adjacent() {
         calib.push_back(n2);
     }
 
+    //output correlated events to text for plotting/testing
+    ofstream eventtxt;
+    eventtxt.open("e_gamma_events.txt");
+
     //check specific calorimeter for energy spectrum
     TH1D *spectrum = new TH1D("spectrum", "Energies for given OM", 100, 0, 10);
     TH1D *timehist = new TH1D("time", "OM to tracker delta_t", 120, -20, 100);
@@ -186,7 +190,7 @@ void tracker_OM_adjacent() {
     int totalentries = tree->GetEntries();
     int cut_calohits = 0, cut_e_energy = 0, cut_OM_deltat = 0, cut_correlated = 0;
 
-    for (int i=0; i < totalentries/10; i++) {
+    for (int i=0; i < totalentries; i++) {
         tree->GetEntry(i);
 
         //set default values
@@ -215,7 +219,7 @@ void tracker_OM_adjacent() {
         }
 
         for (int j=0; j<calohits; j++) {            //for each hit calorimeter j
-            if (wall->at(j) != -1) {continue;}      //main wall only?
+            //if (wall->at(j) != -1) {continue;}      //main wall only?
 
             int col = calocolumn->at(j); 
             float tcol_min = tab_column.at(col) - 4.; 
@@ -326,6 +330,7 @@ void tracker_OM_adjacent() {
                     flag_e_g_correlated = 1; 
                     cut_correlated += 1;
                     gamma_spectrum->Fill(gamma_energy);
+                    eventtxt << i << "\n";
                 }
             }
         }
@@ -337,7 +342,7 @@ void tracker_OM_adjacent() {
     outtree->Write();
 
     //output number of events cut, some events may have multiple recorded tracks 
-    cout << "Initial events: \t\t" << totalentries/10 << "\n";
+    cout << "Initial events: \t\t" << totalentries << "\n";
     cout << "Events with 4 OM hits: \t\t" << cut_calohits << "\n";
     cout << "Events with > 0.3MeV hits: \t" << cut_e_energy << "\n";
     cout << "Events with -0.2 < dt < 50us: \t" << cut_OM_deltat << "\n";
@@ -354,6 +359,8 @@ void tracker_OM_adjacent() {
     outtxt << "Events with track length > 3:  " << good_events << "\n";
     outtxt << "Correlated electron and gamma: " << cut_correlated << "\n";
     outtxt.close();
+
+    eventtxt.close();
 
     spectrum->SetTitle("Energy spectrum for specific OM;Energy (MeV);Count");
     timehist->SetTitle("Time difference between OM and adj tracker;delta_t (us);Count");
