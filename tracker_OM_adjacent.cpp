@@ -45,7 +45,7 @@ bool within_x(vector<int> a, vector<int> b, int x) {
     //check if 3D vectors are within a x by x box on the same side. takes {side, col, layer}. 
     if (a[0] != b[0]) {return 0;}
     if (a[1] < (b[1]-x) || a[1] > (b[1]+x)) {return 0;}
-    if (a[2] < (b[2]-x) || a[1] > (b[2]+x)) {return 0;}
+    if (a[2] < (b[2]-x) || a[2] > (b[2]+x)) {return 0;}
     return 1;
 }
 
@@ -193,6 +193,8 @@ void tracker_OM_adjacent() {
     for (int i=0; i < totalentries; i++) {
         tree->GetEntry(i);
 
+        if (i % 10000 == 0) {cout << i << " out of " << totalentries << "\n";}
+
         //set default values
         e_hit_time = -1;
         e_hit_energy = -1;
@@ -219,7 +221,7 @@ void tracker_OM_adjacent() {
         }
 
         for (int j=0; j<calohits; j++) {            //for each hit calorimeter j
-            //if (wall->at(j) != -1) {continue;}      //main wall only?
+            if (wall->at(j) != -1) {continue;}      //main wall only 
 
             int col = calocolumn->at(j); 
             float tcol_min = tab_column.at(col) - 4.; 
