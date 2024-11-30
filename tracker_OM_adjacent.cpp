@@ -221,7 +221,6 @@ void tracker_OM_adjacent() {
         }
 
         for (int j=0; j<calohits; j++) {            //for each hit calorimeter j
-            if (wall->at(j) != -1) {continue;}      //main wall only 
 
             int col = calocolumn->at(j); 
             float tcol_min = tab_column.at(col) - 4.; 
@@ -234,6 +233,8 @@ void tracker_OM_adjacent() {
 
             int hit_caloid = (13*col) + (260*caloside->at(j)) + calorow->at(j);          
             double hit_energy = (charge->at(j))*calib[hit_caloid]*energy_conv;             //changed to MeV and flipped sign
+
+            if (hit_caloid > 519) {continue;}    //main wall only
 
             if (hit_energy > 0.3) {         //energy cut
                 flag_cut_e_energy = 1;
