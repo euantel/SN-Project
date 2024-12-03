@@ -103,8 +103,14 @@ void tracker_OM_adjacent() {
     tree->SetBranchAddress("digitracker.layer", &trackerlayer);
 
     std::vector<vector<long>> *anode_R0 = new std::vector<vector<long>>;
+    std::vector<vector<long>> *R5 = new std::vector<vector<long>>;
+    std::vector<vector<long>> *R6 = new std::vector<vector<long>>;
     tree->SetBranchStatus("digitracker.anodetimestampR0", 1);
     tree->SetBranchAddress("digitracker.anodetimestampR0", &anode_R0);
+    tree->SetBranchStatus("digitracker.bottomcathodetimestamp", 1);
+    tree->SetBranchAddress("digitracker.bottomcathodetimestamp", &R5);
+    tree->SetBranchStatus("digitracker.topcathodetimestamp", 1);
+    tree->SetBranchAddress("digitracker.topcathodetimestamp", &R6);
 
     /* alternate way of cutting, leaving out for now 
 
@@ -185,15 +191,22 @@ void tracker_OM_adjacent() {
     TH1D *spectrum = new TH1D("spectrum", "Energies for given OM", 100, 0, 10);
     TH1D *timehist = new TH1D("time", "OM to tracker delta_t", 120, -20, 100);
     TH1D *gamma_spectrum = new TH1D("gamma_energies", "Gamma Energies", 140, 0, 7);
+    TH1D *zposhist = new TH1D("z_positions", "z-positions around OM centre", 100, -5, 5);
 
     int good_events = 0;
     int totalentries = tree->GetEntries();
     int cut_calohits = 0, cut_e_energy = 0, cut_OM_deltat = 0, cut_correlated = 0;
 
-    for (int i=0; i < totalentries; i++) {
+    //for z-pos test
+    bool flag_cut_zpos;
+    int cut_zpos = 0;
+    double z_k = 0.01;
+    double z_H = 2.95;
+
+    for (int i=0; i < totalentries/10; i++) {
         tree->GetEntry(i);
 
-        if (i % 10000 == 0) {cout << i << " out of " << totalentries << "\n";}
+        if (i % 10000 == 0) {cout << i << " out of " << totalentries/10 << "\n";}
 
         //set default values
         e_hit_time = -1;
@@ -208,6 +221,7 @@ void tracker_OM_adjacent() {
         flag_cut_OM_delta_t = 0;
         flag_cut_tracklength = 0;
         flag_e_g_correlated = 0;
+        flag_cut_zpos = 0;
 
         //temporary locations for time correlation
         int e_side = 0, e_row = 0, e_col = 0;
@@ -244,6 +258,10 @@ void tracker_OM_adjacent() {
 
             if (hit_caloid == 123) {spectrum->Fill(hit_energy);}                //record energies at specific OM 
 
+            //calc OM z-range
+            double z_min = -1.1165 + 0.18714*calorow->at(j) - 1;
+            double z_max = -1.1165 + 0.18714*calorow->at(j) + 1;
+
             for (int k=0; k<trackercolumn->size(); k++) {
                 if (trackerside->at(k) != caloside->at(j)) {continue;}          //check same side
                 if (trackerlayer->at(k) < 7) {continue;}                        //check layer 8 or 9
@@ -251,6 +269,9 @@ void tracker_OM_adjacent() {
                 int tcol = trackercolumn->at(k);
                 int tlayer = trackerlayer->at(k);
                 int tside = trackerside->at(k);
+
+                //enforce only some known good cells (z-pos check only)
+                if (tside != 0 || tcol < 9 || tcol > 37 || tlayer != 8) {continue;}
 
                 if (tcol <= tcol_max && tcol >= tcol_min) {                    //within +- 4 range, start track 
 
@@ -260,6 +281,23 @@ void tracker_OM_adjacent() {
                     if ((delta_t > -0.2 && delta_t < 50)) {     //time cut 
                         flag_cut_OM_delta_t = 1;
                     }
+
+                    //z-pos calculation (just using basic one for now)
+                    double t_top = (R6->at(k).at(0) - anode_R0->at(k).at(0))*12.5E-3;          // Put it in µs
+                    double t_bottom = (R5->at(k).at(0) - anode_R0->at(k).at(0))*12.5E-3;
+                    double z_gg = -99999; 
+
+                    if (t_top > 0 && t_bottom > 0) {
+                        double t_ratio = ((t_bottom - t_top)/(t_top + t_bottom));
+                        //z_gg = t_ratio;
+
+                        //more complicated calulation
+                        z_gg = (z_H/2)*t_ratio - (z_k*(z_H*z_H)/4)*t_ratio*(1-abs(t_ratio));
+
+                        zposhist->Fill(z_gg - (z_min + z_max)/2.);
+                    }
+
+                    if (z_gg > z_min && z_gg < z_max) {flag_cut_zpos = 1;}     //z-pos cut 
 
                     track->push_back({tside, tcol, tlayer});
                     adj_tracker = 1; 
@@ -334,6 +372,7 @@ void tracker_OM_adjacent() {
                     cut_correlated += 1;
                     gamma_spectrum->Fill(gamma_energy);
                     eventtxt << i << "\n";
+                    if (flag_cut_zpos == 1) {cut_zpos += 1;} //record at very end
                 }
             }
         }
@@ -345,22 +384,24 @@ void tracker_OM_adjacent() {
     outtree->Write();
 
     //output number of events cut, some events may have multiple recorded tracks 
-    cout << "Initial events: \t\t" << totalentries << "\n";
+    cout << "Initial events: \t\t" << totalentries/10 << "\n";
     cout << "Events with 4 OM hits: \t\t" << cut_calohits << "\n";
     cout << "Events with > 0.3MeV hits: \t" << cut_e_energy << "\n";
     cout << "Events with -0.2 < dt < 50us: \t" << cut_OM_deltat << "\n";
     cout << "Events with track length > 3: \t" << good_events << "\n";
     cout << "Correlated electron and gamma:\t" << cut_correlated << "\n";
+    cout << "also correlated z-position:\t" << cut_zpos << "\n";
 
     //quick text output to file 
     ofstream outtxt;
     outtxt.open("cuts.txt");
-    outtxt << "Initial events:                " << totalentries << "\n";
+    outtxt << "Initial events:                " << totalentries/10 << "\n";
     outtxt << "Events with 4+ OM hits:        " << cut_calohits << "\n";
     outtxt << "Events with > 0.3MeV hits:     " << cut_e_energy << "\n";
     outtxt << "Events with -0.2 < dt < 50us:  " << cut_OM_deltat << "\n";
     outtxt << "Events with track length > 3:  " << good_events << "\n";
     outtxt << "Correlated electron and gamma: " << cut_correlated << "\n";
+    outtxt << "also correlated z-position:\t" << cut_zpos << "\n";
     outtxt.close();
 
     eventtxt.close();
@@ -372,8 +413,9 @@ void tracker_OM_adjacent() {
     timehist->Write();
     gamma_spectrum->Write();
 
-    gamma_spectrum->Draw();
+    //gamma_spectrum->Draw();
     //spectrum->Draw();
     //timehist->Draw();
+    zposhist->Draw();
 
 }
