@@ -49,10 +49,10 @@ bool within_x(vector<int> a, vector<int> b, int x) {
     return 1;
 }
 
-void tracker_OM_adjacent() {
+void e_gamma_sim() {
 
     //get tree and setup relevant branches
-    TFile *f = new TFile("snemo_run-1166_udd.root", "READ");
+    TFile *f = new TFile("Falaise_UDD_5_1_2.root", "READ");
     TTree *tree = (TTree*)f->Get("SimData");
 
     gInterpreter->GenerateDictionary("vector<vector<int>>","vector");          //seems to fix 2D vectors
@@ -125,7 +125,7 @@ void tracker_OM_adjacent() {
     */
 
     //create outfile and tree for particle tracks
-    TFile *out = new TFile("tracks.root", "RECREATE");
+    TFile *out = new TFile("tracks_SIM.root", "RECREATE");
     TTree *outtree = new TTree("tracks", "SimData Tracks");
     int e_hit_caloid = 0, gamma_caloid;
     double e_hit_energy, gamma_energy = 0;
@@ -185,7 +185,7 @@ void tracker_OM_adjacent() {
 
     //output correlated events to text for plotting/testing
     ofstream eventtxt;
-    eventtxt.open("e_gamma_events.txt");
+    eventtxt.open("e_gamma_events_SIM.txt");
 
     //check specific calorimeter for energy spectrum
     TH1D *spectrum = new TH1D("spectrum", "Energies for given OM", 100, 0, 5);
@@ -246,7 +246,7 @@ void tracker_OM_adjacent() {
             bool adj_tracker = 0;
 
             int hit_caloid = (13*col) + (260*caloside->at(j)) + calorow->at(j);          
-            double hit_energy = (charge->at(j))*calib[hit_caloid]*energy_conv;             //changed to MeV and flipped sign
+            double hit_energy = (charge->at(j))*(-1000.);//*calib[hit_caloid]*energy_conv;       //TEMPORARY CALIBRATION by -1000
 
             if (hit_caloid > 519) {continue;}    //main wall only
 
@@ -393,7 +393,7 @@ void tracker_OM_adjacent() {
 
     //quick text output to file 
     ofstream outtxt;
-    outtxt.open("cuts.txt");
+    outtxt.open("cuts_SIM.txt");
     outtxt << "Initial events:                " << totalentries << "\n";
     outtxt << "Events with 4+ OM hits:        " << cut_calohits << "\n";
     outtxt << "Events with > 0.3MeV hits:     " << cut_e_energy << "\n";

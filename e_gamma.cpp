@@ -49,7 +49,7 @@ bool within_x(vector<int> a, vector<int> b, int x) {
     return 1;
 }
 
-void tracker_OM_adjacent() {
+void e_gamma() {
 
     //get tree and setup relevant branches
     TFile *f = new TFile("snemo_run-1166_udd.root", "READ");
