@@ -188,9 +188,9 @@ void tracker_OM_adjacent() {
     eventtxt.open("e_gamma_events.txt");
 
     //check specific calorimeter for energy spectrum
-    TH1D *spectrum = new TH1D("spectrum", "Energies for given OM", 100, 0, 10);
+    TH1D *spectrum = new TH1D("spectrum", "Energies for given OM", 100, 0, 5);
     TH1D *timehist = new TH1D("time", "OM to tracker delta_t", 120, -20, 100);
-    TH1D *gamma_spectrum = new TH1D("gamma_energies", "Gamma Energies", 140, 0, 7);
+    TH1D *gamma_spectrum = new TH1D("gamma_energies", "Gamma Energies", 140, 0, 3.5);
     TH1D *zposhist = new TH1D("z_positions", "z-positions around OM centre", 100, -5, 5);
 
     int good_events = 0;
@@ -203,10 +203,10 @@ void tracker_OM_adjacent() {
     double z_k = 0.01;
     double z_H = 2.95;
 
-    for (int i=0; i < totalentries/10; i++) {
+    for (int i=0; i < totalentries; i++) {
         tree->GetEntry(i);
 
-        if (i % 10000 == 0) {cout << i << " out of " << totalentries/10 << "\n";}
+        if (i % 10000 == 0) {cout << i << " out of " << totalentries << "\n";}
 
         //set default values
         e_hit_time = -1;
@@ -256,8 +256,6 @@ void tracker_OM_adjacent() {
                 continue;
             }
 
-            if (hit_caloid == 123) {spectrum->Fill(hit_energy);}                //record energies at specific OM 
-
             //calc OM z-range
             double z_min = -1.1165 + 0.18714*calorow->at(j) - 1;
             double z_max = -1.1165 + 0.18714*calorow->at(j) + 1;
@@ -271,7 +269,7 @@ void tracker_OM_adjacent() {
                 int tside = trackerside->at(k);
 
                 //enforce only some known good cells (z-pos check only)
-                if (tside != 0 || tcol < 9 || tcol > 37 || tlayer != 8) {continue;}
+                //if (tside != 0 || tcol < 9 || tcol > 37 || tlayer != 8) {continue;} revisit this later ----------------------
 
                 if (tcol <= tcol_max && tcol >= tcol_min) {                    //within +- 4 range, start track 
 
@@ -282,22 +280,22 @@ void tracker_OM_adjacent() {
                         flag_cut_OM_delta_t = 1;
                     }
 
-                    //z-pos calculation (just using basic one for now)
+                    //z-pos calculation
                     double t_top = (R6->at(k).at(0) - anode_R0->at(k).at(0))*12.5E-3;          // Put it in µs
                     double t_bottom = (R5->at(k).at(0) - anode_R0->at(k).at(0))*12.5E-3;
                     double z_gg = -99999; 
 
-                    if (t_top > 0 && t_bottom > 0) {
+                    if (t_top > 0 && t_bottom > 0 && flag_cut_OM_delta_t == 1) {
                         double t_ratio = ((t_bottom - t_top)/(t_top + t_bottom));
                         //z_gg = t_ratio;
 
-                        //more complicated calulation
+                        //newer calulation
                         z_gg = (z_H/2)*t_ratio - (z_k*(z_H*z_H)/4)*t_ratio*(1-abs(t_ratio));
 
                         zposhist->Fill(z_gg - (z_min + z_max)/2.);
                     }
 
-                    if (z_gg > z_min && z_gg < z_max) {flag_cut_zpos = 1;}     //z-pos cut 
+                    if (z_gg >= z_min && z_gg <= z_max) {flag_cut_zpos = 1;}     //z-pos cut 
 
                     track->push_back({tside, tcol, tlayer});
                     adj_tracker = 1; 
@@ -371,6 +369,7 @@ void tracker_OM_adjacent() {
                     flag_e_g_correlated = 1; 
                     cut_correlated += 1;
                     gamma_spectrum->Fill(gamma_energy);
+                    spectrum->Fill(e_hit_energy);
                     eventtxt << i << "\n";
                     if (flag_cut_zpos == 1) {cut_zpos += 1;} //record at very end
                 }
@@ -384,7 +383,7 @@ void tracker_OM_adjacent() {
     outtree->Write();
 
     //output number of events cut, some events may have multiple recorded tracks 
-    cout << "Initial events: \t\t" << totalentries/10 << "\n";
+    cout << "Initial events: \t\t" << totalentries << "\n";
     cout << "Events with 4 OM hits: \t\t" << cut_calohits << "\n";
     cout << "Events with > 0.3MeV hits: \t" << cut_e_energy << "\n";
     cout << "Events with -0.2 < dt < 50us: \t" << cut_OM_deltat << "\n";
@@ -395,7 +394,7 @@ void tracker_OM_adjacent() {
     //quick text output to file 
     ofstream outtxt;
     outtxt.open("cuts.txt");
-    outtxt << "Initial events:                " << totalentries/10 << "\n";
+    outtxt << "Initial events:                " << totalentries << "\n";
     outtxt << "Events with 4+ OM hits:        " << cut_calohits << "\n";
     outtxt << "Events with > 0.3MeV hits:     " << cut_e_energy << "\n";
     outtxt << "Events with -0.2 < dt < 50us:  " << cut_OM_deltat << "\n";
@@ -406,16 +405,16 @@ void tracker_OM_adjacent() {
 
     eventtxt.close();
 
-    spectrum->SetTitle("Energy spectrum for specific OM;Energy (MeV);Count");
-    timehist->SetTitle("Time difference between OM and adj tracker;delta_t (us);Count");
-    gamma_spectrum->SetTitle("Energies of Correlated Gammas;E (MeV);Count");
+    spectrum->SetTitle("Energy of Correlated Electrons;Energy (MeV);Count");
+    timehist->SetTitle("Time difference between OM and adjacent tracker;delta_t (us);Count");
+    gamma_spectrum->SetTitle("Energy of Correlated Photons;Energy (MeV);Count");
     spectrum->Write();
     timehist->Write();
     gamma_spectrum->Write();
 
-    //gamma_spectrum->Draw();
+    gamma_spectrum->Draw();
     //spectrum->Draw();
     //timehist->Draw();
-    zposhist->Draw();
+    //zposhist->Draw();
 
 }
