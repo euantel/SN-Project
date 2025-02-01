@@ -66,7 +66,7 @@ void e_gamma_sim() {
     vector<int> *calocolumn = new vector<int>;
     vector<int> *calorow = new vector<int>;
     vector<long> *timestamp = new vector<long>;
-    vector<int> *charge = new vector<int>;
+    vector<int> *caloenergy = new vector<int>;
     vector<int> *trackerid = new vector<int>;
     vector<int> *trackerside = new vector<int>;
     vector<int> *trackercolumn = new vector<int>;
@@ -87,8 +87,8 @@ void e_gamma_sim() {
     tree->SetBranchAddress("digicalo.row", &calorow);
     tree->SetBranchStatus("digicalo.timestamp", 1);
     tree->SetBranchAddress("digicalo.timestamp", &timestamp);
-    tree->SetBranchStatus("digicalo.charge", 1);
-    tree->SetBranchAddress("digicalo.charge", &charge);
+    tree->SetBranchStatus("calo.energy", 1);                            //Simuation uses calo.energy rather than digicalo.charge
+    tree->SetBranchAddress("calo.energy", &caloenergy);
     tree->SetBranchStatus("digicalo.wall", 1);
     tree->SetBranchAddress("digicalo.wall", &wall);
     tree->SetBranchStatus("digitracker.id", 1);                    //trackers
@@ -146,7 +146,7 @@ void e_gamma_sim() {
     outtree->Branch("digicalo.column", &calocolumn);
     outtree->Branch("digicalo.row", &calorow);
     outtree->Branch("digicalo.timestamp", &timestamp);
-    outtree->Branch("digicalo.charge", &charge);
+    outtree->Branch("calo.energy", &caloenergy);
     outtree->Branch("digicalo.wall", &wall);
     outtree->Branch("digitracker.nohits", &trackerhits);
     outtree->Branch("digitracker.side", &trackerside);
@@ -192,6 +192,9 @@ void e_gamma_sim() {
     TH1D *timehist = new TH1D("time", "OM to tracker delta_t", 120, -20, 100);
     TH1D *gamma_spectrum = new TH1D("gamma_energies", "Gamma Energies", 140, 0, 3.5);
     TH1D *zposhist = new TH1D("z_positions", "z-positions around OM centre", 100, -5, 5);
+
+    //recording energy at only OM ID 123
+    TH1D *spectrum_123 = new TH1D("spectrum_123", "Electron and gamma energies for OM 123", 100, 0, 5);
 
     int good_events = 0;
     int totalentries = tree->GetEntries();
@@ -245,8 +248,12 @@ void e_gamma_sim() {
 
             bool adj_tracker = 0;
 
-            int hit_caloid = (13*col) + (260*caloside->at(j)) + calorow->at(j);          
-            double hit_energy = (charge->at(j))*(-1000.);//*calib[hit_caloid]*energy_conv;       //TEMPORARY CALIBRATION by -1000
+            int hit_caloid = (13*col) + (260*caloside->at(j)) + calorow->at(j);  
+            
+            double hit_energy = 0.;
+            if (calib[hit_caloid] != 0) {       
+                hit_energy = (caloenergy->at(j));                               //should omit dead OMs 
+            }
 
             if (hit_caloid > 519) {continue;}    //main wall only
 
@@ -368,8 +375,14 @@ void e_gamma_sim() {
                 if (abs(6.25*(e_hit_time - gamma_timestamp)) < 50) {
                     flag_e_g_correlated = 1; 
                     cut_correlated += 1;
+
+                    //write to histograms
                     gamma_spectrum->Fill(gamma_energy);
                     spectrum->Fill(e_hit_energy);
+                    
+                    if (gamma_caloid == 123) {spectrum_123->Fill(gamma_energy);}
+                    if (e_hit_caloid == 123) {spectrum_123->Fill(e_hit_energy);}
+
                     eventtxt << i << "\n";
                     if (flag_cut_zpos == 1) {cut_zpos += 1;} //record at very end
                 }
@@ -408,9 +421,12 @@ void e_gamma_sim() {
     spectrum->SetTitle("Energy of Correlated Electrons;Energy (MeV);Count");
     timehist->SetTitle("Time difference between OM and adjacent tracker;delta_t (us);Count");
     gamma_spectrum->SetTitle("Energy of Correlated Photons;Energy (MeV);Count");
+    spectrum_123->SetTitle("Energy of correlated electrons and photons on OM 123;Energy (MeV);Count")
+
     spectrum->Write();
     timehist->Write();
     gamma_spectrum->Write();
+    spectrum_123->Write();
 
     gamma_spectrum->Draw();
     //spectrum->Draw();

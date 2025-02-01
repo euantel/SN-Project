@@ -188,10 +188,13 @@ void e_gamma() {
     eventtxt.open("e_gamma_events.txt");
 
     //check specific calorimeter for energy spectrum
-    TH1D *spectrum = new TH1D("spectrum", "Energies for given OM", 100, 0, 5);
+    TH1D *spectrum = new TH1D("spectrum", "Energies for correlated electrons", 100, 0, 5);
     TH1D *timehist = new TH1D("time", "OM to tracker delta_t", 120, -20, 100);
     TH1D *gamma_spectrum = new TH1D("gamma_energies", "Gamma Energies", 140, 0, 3.5);
     TH1D *zposhist = new TH1D("z_positions", "z-positions around OM centre", 100, -5, 5);
+
+    //recording energy at only OM ID 123
+    TH1D *spectrum_123 = new TH1D("spectrum_123", "Electron and gamma energies for OM 123", 100, 0, 5);
 
     int good_events = 0;
     int totalentries = tree->GetEntries();
@@ -203,10 +206,17 @@ void e_gamma() {
     double z_k = 0.01;
     double z_H = 2.95;
 
+    //record first and last timestamp for total runtime
+    long time0 = 0, time1 = 0; 
+
     for (int i=0; i < totalentries; i++) {
         tree->GetEntry(i);
 
         if (i % 10000 == 0) {cout << i << " out of " << totalentries << "\n";}
+
+        //record time of run 
+        if (i == 0) {time0 = timestamp->at(0);}
+        if (i == totalentries) {time1 = timestamp->at(timestamp->size());}
 
         //set default values
         e_hit_time = -1;
@@ -368,8 +378,14 @@ void e_gamma() {
                 if (abs(6.25*(e_hit_time - gamma_timestamp)) < 50) {
                     flag_e_g_correlated = 1; 
                     cut_correlated += 1;
+
+                    //fill histograms
                     gamma_spectrum->Fill(gamma_energy);
                     spectrum->Fill(e_hit_energy);
+
+                    if (gamma_caloid == 123) {spectrum_123->Fill(gamma_energy);}
+                    if (e_hit_caloid == 123) {spectrum_123->Fill(e_hit_energy);}
+
                     eventtxt << i << "\n";
                     if (flag_cut_zpos == 1) {cut_zpos += 1;} //record at very end
                 }
@@ -389,7 +405,8 @@ void e_gamma() {
     cout << "Events with -0.2 < dt < 50us: \t" << cut_OM_deltat << "\n";
     cout << "Events with track length > 3: \t" << good_events << "\n";
     cout << "Correlated electron and gamma:\t" << cut_correlated << "\n";
-    cout << "also correlated z-position:\t" << cut_zpos << "\n";
+    cout << "also correlated z-position:\t" << cut_zpos << "\n\n";
+    cout << "time of run: " << (time1-time0)*6.25/1000000000. << "s\n";
 
     //quick text output to file 
     ofstream outtxt;
@@ -401,6 +418,7 @@ void e_gamma() {
     outtxt << "Events with track length > 3:  " << good_events << "\n";
     outtxt << "Correlated electron and gamma: " << cut_correlated << "\n";
     outtxt << "also correlated z-position:\t" << cut_zpos << "\n";
+    outtxt << "time of run: " << (time1-time0)*6.25/1000000000. << "s\n\n";
     outtxt.close();
 
     eventtxt.close();
@@ -408,9 +426,11 @@ void e_gamma() {
     spectrum->SetTitle("Energy of Correlated Electrons;Energy (MeV);Count");
     timehist->SetTitle("Time difference between OM and adjacent tracker;delta_t (us);Count");
     gamma_spectrum->SetTitle("Energy of Correlated Photons;Energy (MeV);Count");
+    spectrum_123->SetTitle("Energy of correlated electrons and photons on OM 123;Energy (MeV);Count")
     spectrum->Write();
     timehist->Write();
     gamma_spectrum->Write();
+    spectrum_123->Write();
 
     gamma_spectrum->Draw();
     //spectrum->Draw();
