@@ -66,7 +66,8 @@ void e_gamma_sim() {
     vector<int> *calocolumn = new vector<int>;
     vector<int> *calorow = new vector<int>;
     vector<long> *timestamp = new vector<long>;
-    vector<int> *caloenergy = new vector<int>;
+    vector<double> *caloenergy = new vector<double>;
+    vector<int> *calocharge = new vector<int>; //temporary check
     vector<int> *trackerid = new vector<int>;
     vector<int> *trackerside = new vector<int>;
     vector<int> *trackercolumn = new vector<int>;
@@ -89,6 +90,8 @@ void e_gamma_sim() {
     tree->SetBranchAddress("digicalo.timestamp", &timestamp);
     tree->SetBranchStatus("calo.energy", 1);                            //Simuation uses calo.energy rather than digicalo.charge
     tree->SetBranchAddress("calo.energy", &caloenergy);
+    tree->SetBranchStatus("digicalo.charge", 1);                          
+    tree->SetBranchAddress("digicalo.charge", &calocharge);
     tree->SetBranchStatus("digicalo.wall", 1);
     tree->SetBranchAddress("digicalo.wall", &wall);
     tree->SetBranchStatus("digitracker.id", 1);                    //trackers
@@ -183,6 +186,14 @@ void e_gamma_sim() {
         calib.push_back(n2);
     }
 
+    //input tracker activity to replicate dead cells
+    vector<long> tracker_activity;
+    ifstream tracker_file("tracker_activity.txt");
+    long n3;
+    while (tracker_file >> n3) {
+        tracker_activity.push_back(n3);
+    }
+
     //output correlated events to text for plotting/testing
     ofstream eventtxt;
     eventtxt.open("e_gamma_events_SIM.txt");
@@ -251,9 +262,10 @@ void e_gamma_sim() {
             int hit_caloid = (13*col) + (260*caloside->at(j)) + calorow->at(j);  
             
             double hit_energy = 0.;
-            if (calib[hit_caloid] != 0) {       
-                hit_energy = (caloenergy->at(j));                               //should omit dead OMs 
-            }
+            if (calib[hit_caloid] != 0) {
+                hit_energy = caloenergy->at(j);//(calocharge->at(j))/(-1000.);          //should omit dead OMs 
+            }                       
+        
 
             if (hit_caloid > 519) {continue;}    //main wall only
 
@@ -274,6 +286,9 @@ void e_gamma_sim() {
                 int tcol = trackercolumn->at(k);
                 int tlayer = trackerlayer->at(k);
                 int tside = trackerside->at(k);
+
+                //skip trackers with low activity in the real run
+                if (tracker_activity[tside*1017 + tcol*9 + tlayer] < 5000) {continue;}
 
                 //enforce only some known good cells (z-pos check only)
                 //if (tside != 0 || tcol < 9 || tcol > 37 || tlayer != 8) {continue;} revisit this later ----------------------
@@ -421,7 +436,7 @@ void e_gamma_sim() {
     spectrum->SetTitle("Energy of Correlated Electrons;Energy (MeV);Count");
     timehist->SetTitle("Time difference between OM and adjacent tracker;delta_t (us);Count");
     gamma_spectrum->SetTitle("Energy of Correlated Photons;Energy (MeV);Count");
-    spectrum_123->SetTitle("Energy of correlated electrons and photons on OM 123;Energy (MeV);Count")
+    spectrum_123->SetTitle("Energy of correlated electrons and photons on OM 123;Energy (MeV);Count");
 
     spectrum->Write();
     timehist->Write();

@@ -52,7 +52,7 @@ bool within_x(vector<int> a, vector<int> b, int x) {
 void e_gamma() {
 
     //get tree and setup relevant branches
-    TFile *f = new TFile("snemo_run-1166_udd.root", "READ");
+    TFile *f = new TFile("snemo_run-1093_udd.root", "READ");
     TTree *tree = (TTree*)f->Get("SimData");
 
     gInterpreter->GenerateDictionary("vector<vector<int>>","vector");          //seems to fix 2D vectors
@@ -192,6 +192,7 @@ void e_gamma() {
     TH1D *timehist = new TH1D("time", "OM to tracker delta_t", 120, -20, 100);
     TH1D *gamma_spectrum = new TH1D("gamma_energies", "Gamma Energies", 140, 0, 3.5);
     TH1D *zposhist = new TH1D("z_positions", "z-positions around OM centre", 100, -5, 5);
+    TH1D *trackerhist = new TH1D("trackers", "tracker activity distribution", 2034, 0, 2034);
 
     //recording energy at only OM ID 123
     TH1D *spectrum_123 = new TH1D("spectrum_123", "Electron and gamma energies for OM 123", 100, 0, 5);
@@ -209,6 +210,9 @@ void e_gamma() {
     //record first and last timestamp for total runtime
     long time0 = 0, time1 = 0; 
 
+    //record active trackers
+    long tracker_array[2034]; 
+
     for (int i=0; i < totalentries; i++) {
         tree->GetEntry(i);
 
@@ -216,7 +220,7 @@ void e_gamma() {
 
         //record time of run 
         if (i == 0) {time0 = timestamp->at(0);}
-        if (i == totalentries) {time1 = timestamp->at(timestamp->size());}
+        if (i == (totalentries-1)) {time1 = timestamp->at(timestamp->size()-1);}
 
         //set default values
         e_hit_time = -1;
@@ -271,12 +275,16 @@ void e_gamma() {
             double z_max = -1.1165 + 0.18714*calorow->at(j) + 1;
 
             for (int k=0; k<trackercolumn->size(); k++) {
-                if (trackerside->at(k) != caloside->at(j)) {continue;}          //check same side
-                if (trackerlayer->at(k) < 7) {continue;}                        //check layer 8 or 9
-
                 int tcol = trackercolumn->at(k);
                 int tlayer = trackerlayer->at(k);
                 int tside = trackerside->at(k);
+
+                //monitoring active trackers
+                tracker_array[tside*1017 + tcol*9 + tlayer] += 1;
+                trackerhist->Fill(tside*1017 + tcol*9 + tlayer);
+
+                if (trackerside->at(k) != caloside->at(j)) {continue;}          //check same side
+                if (trackerlayer->at(k) < 7) {continue;}                        //check layer 8 or 9
 
                 //enforce only some known good cells (z-pos check only)
                 //if (tside != 0 || tcol < 9 || tcol > 37 || tlayer != 8) {continue;} revisit this later ----------------------
@@ -305,7 +313,9 @@ void e_gamma() {
                         zposhist->Fill(z_gg - (z_min + z_max)/2.);
                     }
 
-                    if (z_gg >= z_min && z_gg <= z_max) {flag_cut_zpos = 1;}     //z-pos cut 
+                    if (z_gg >= z_min && z_gg <= z_max) {
+                        flag_cut_zpos = 1;                      //z-pos cut 
+                    }    
 
                     track->push_back({tside, tcol, tlayer});
                     adj_tracker = 1; 
@@ -407,6 +417,8 @@ void e_gamma() {
     cout << "Correlated electron and gamma:\t" << cut_correlated << "\n";
     cout << "also correlated z-position:\t" << cut_zpos << "\n\n";
     cout << "time of run: " << (time1-time0)*6.25/1000000000. << "s\n";
+    cout << "no. passed chosen tracker: " << passed_tracker << "\n";
+    cout << "no. passed tracker and z cut" << passed_tracker_and_z << "\n";
 
     //quick text output to file 
     ofstream outtxt;
@@ -423,14 +435,24 @@ void e_gamma() {
 
     eventtxt.close();
 
+    //write tracker activity
+    ofstream trackertxt;
+    trackertxt.open("tracker_activity.txt");
+    for (int i=0; i<2034; i++) {
+        trackertxt << tracker_array[i] << "\n";
+    }
+    trackertxt.close();
+
     spectrum->SetTitle("Energy of Correlated Electrons;Energy (MeV);Count");
     timehist->SetTitle("Time difference between OM and adjacent tracker;delta_t (us);Count");
     gamma_spectrum->SetTitle("Energy of Correlated Photons;Energy (MeV);Count");
-    spectrum_123->SetTitle("Energy of correlated electrons and photons on OM 123;Energy (MeV);Count")
+    spectrum_123->SetTitle("Energy of correlated electrons and photons on OM 123;Energy (MeV);Count");
+    trackerhist->SetTitle("Tracker activity over entire run;Tracker ID;Count");
     spectrum->Write();
     timehist->Write();
     gamma_spectrum->Write();
     spectrum_123->Write();
+    trackerhist->Write();
 
     gamma_spectrum->Draw();
     //spectrum->Draw();

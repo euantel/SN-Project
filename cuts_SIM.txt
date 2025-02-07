@@ -1,7 +1,0 @@
-Initial events:                3000000
-Events with 4+ OM hits:        292602
-Events with > 0.3MeV hits:     292602
-Events with -0.2 < dt < 50us:  185709
-Events with track length > 3:  194238
-Correlated electron and gamma: 166501
-also correlated z-position:	151100

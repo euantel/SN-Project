@@ -72,3 +72,9 @@ SIM_event8387.png
 snemo_run-1093_udd.root
 e_gamma_events.txt
 e_gamma_events.txt
+tracker_activity.txt
+tracker_activity.txt:Zone.Identifier
+1093/tracker_activity.txt
+1093/tracks.root
+SIM/cuts_SIM.txt
+SIM/e_gamma_events_SIM.txt
