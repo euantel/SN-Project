@@ -103,10 +103,22 @@ void e_gamma() {
     tree->SetBranchAddress("digitracker.layer", &trackerlayer);
 
     std::vector<vector<long>> *anode_R0 = new std::vector<vector<long>>;
+    std::vector<vector<long>> *anode_R1 = new std::vector<vector<long>>;
+    std::vector<vector<long>> *anode_R2 = new std::vector<vector<long>>;
+    std::vector<vector<long>> *anode_R3 = new std::vector<vector<long>>;
+    std::vector<vector<long>> *anode_R4 = new std::vector<vector<long>>;
     std::vector<vector<long>> *R5 = new std::vector<vector<long>>;
     std::vector<vector<long>> *R6 = new std::vector<vector<long>>;
     tree->SetBranchStatus("digitracker.anodetimestampR0", 1);
     tree->SetBranchAddress("digitracker.anodetimestampR0", &anode_R0);
+    tree->SetBranchStatus("digitracker.anodetimestampR1", 1);
+    tree->SetBranchAddress("digitracker.anodetimestampR1", &anode_R1);
+    tree->SetBranchStatus("digitracker.anodetimestampR2", 1);
+    tree->SetBranchAddress("digitracker.anodetimestampR2", &anode_R2);
+    tree->SetBranchStatus("digitracker.anodetimestampR3", 1);
+    tree->SetBranchAddress("digitracker.anodetimestampR3", &anode_R3);
+    tree->SetBranchStatus("digitracker.anodetimestampR4", 1);
+    tree->SetBranchAddress("digitracker.anodetimestampR4", &anode_R4);
     tree->SetBranchStatus("digitracker.bottomcathodetimestamp", 1);
     tree->SetBranchAddress("digitracker.bottomcathodetimestamp", &R5);
     tree->SetBranchStatus("digitracker.topcathodetimestamp", 1);
@@ -214,13 +226,13 @@ void e_gamma() {
     long tracker_array[2034] = {}; 
     int affected = 0, unaffected = 0;
 
-    for (int i=0; i < totalentries; i++) {
+    for (int i=0; i < 50000; i++) {
         tree->GetEntry(i);
 
-        //monitor tracker activity before any cuts
-        for (int j=0, j<trackercolumn->Size(), j++) {
-            tracker_array[trackerside->at(j)*1017 + trackercolumn->at(j)*9 + trackerlayer->at(j)] += 1;
-            trackerhist->Fill(trackerside->at(j)*1017 + trackercolumn->at(j)*9 + trackerlayer->at(j));
+        //monitor tracker activity before any cuts, might slow code quite a bit
+        for (int J=0; J<trackercolumn->size(); J++) {
+            tracker_array[trackerside->at(J)*1017 + trackercolumn->at(J)*9 + trackerlayer->at(J)] += 1;
+            trackerhist->Fill(trackerside->at(J)*1017 + trackercolumn->at(J)*9 + trackerlayer->at(J));
         }
 
         if (i % 10000 == 0) {cout << i << " out of " << totalentries << "\n";}
@@ -304,9 +316,42 @@ void e_gamma() {
                         flag_cut_OM_delta_t = 1;
                     }
 
+                    //check for good timestamps
+                    long top_timestamp = 0, bottom_timestamp = 0;
+                    if (R6->at(k).at(0) > 0) {top_timestamp = R6->at(k).at(0);} else {
+                        //substitute with anode times within ~5us for now 
+                        if ((abs(R5->at(k).at(0)-anode_R1->at(k).at(0)) < 500) || (abs(R5->at(k).at(0)-anode_R3->at(k).at(0)) < 500)) {
+                            if (R5->at(k).at(0) > 0) {
+                                if (anode_R2->at(k).at(0) > 0) {top_timestamp = anode_R2->at(k).at(0);}
+                                else if (anode_R4->at(k).at(0) > 0) {top_timestamp = anode_R4->at(k).at(0);}
+                            }
+                        }
+                        if ((abs(R5->at(k).at(0)-anode_R2->at(k).at(0)) < 500) || (abs(R5->at(k).at(0)-anode_R4->at(k).at(0)) < 500)) {
+                            if (R5->at(k).at(0) > 0) {
+                                if (anode_R1->at(k).at(0) > 0) {top_timestamp = anode_R1->at(k).at(0);}
+                                else if (anode_R3->at(k).at(0) > 0) {top_timestamp = anode_R3->at(k).at(0);}
+                            }
+                        }
+                    } 
+                    if (R5->at(k).at(0) > 0) {bottom_timestamp = R5->at(k).at(0);} else {
+                        //substitute with anode times within ~5us for now 
+                        if ((abs(R6->at(k).at(0)-anode_R1->at(k).at(0)) < 500) || (abs(R6->at(k).at(0)-anode_R3->at(k).at(0)) < 500)) {
+                            if (R6->at(k).at(0) > 0) {
+                                if (anode_R2->at(k).at(0) > 0) {bottom_timestamp = anode_R2->at(k).at(0);}
+                                else if (anode_R4->at(k).at(0) > 0) {bottom_timestamp = anode_R4->at(k).at(0);}
+                            }
+                        }
+                        if ((abs(R6->at(k).at(0)-anode_R2->at(k).at(0)) < 500) || (abs(R6->at(k).at(0)-anode_R4->at(k).at(0)) < 500)) {
+                            if (R6->at(k).at(0) > 0) {
+                                if (anode_R1->at(k).at(0) > 0) {bottom_timestamp = anode_R1->at(k).at(0);}
+                                else if (anode_R3->at(k).at(0) > 0) {bottom_timestamp = anode_R3->at(k).at(0);}
+                            }
+                        }  
+                    }
+
                     //z-pos calculation
-                    double t_top = (R6->at(k).at(0) - anode_R0->at(k).at(0))*12.5E-3;          // Put it in µs
-                    double t_bottom = (R5->at(k).at(0) - anode_R0->at(k).at(0))*12.5E-3;
+                    double t_top = (top_timestamp - anode_R0->at(k).at(0))*12.5E-3;          // Put it in µs
+                    double t_bottom = (bottom_timestamp - anode_R0->at(k).at(0))*12.5E-3;
                     double z_gg = -99999; 
 
                     if (t_top > 0 && t_bottom > 0 && flag_cut_OM_delta_t == 1) {
