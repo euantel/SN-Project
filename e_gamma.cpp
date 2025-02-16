@@ -226,7 +226,7 @@ void e_gamma() {
     long tracker_array[2034] = {}; 
     int affected = 0, unaffected = 0;
 
-    for (int i=0; i < 50000; i++) {
+    for (int i=0; i < totalentries; i++) {
         tree->GetEntry(i);
 
         //monitor tracker activity before any cuts, might slow code quite a bit
@@ -260,7 +260,7 @@ void e_gamma() {
         int e_side = 0, e_row = 0, e_col = 0;
         int g_side = 0, g_row = 0, g_col = 0;
 
-        if (calohits == 4) {
+        if (calohits > 2) {
             flag_cut_calohits = 1;   //passed first cut
         } else {
             outtree->Fill();
@@ -269,6 +269,9 @@ void e_gamma() {
 
         //for z=pos investigation
         vector<int> tracker_zpos = {0, 0};
+
+        //trying new energy cut strategy
+        int no_high_energy = 0;
 
         for (int j=0; j<calohits; j++) {            //for each hit calorimeter j
 
@@ -287,7 +290,7 @@ void e_gamma() {
             if (hit_caloid > 519) {continue;}    //main wall only
 
             if (hit_energy > 0.3) {         //energy cut
-                flag_cut_e_energy = 1;
+                no_high_energy += 1;
             } else {
                 continue;
             }
@@ -429,6 +432,7 @@ void e_gamma() {
                 }
             }
         }
+        if (no_high_energy == 2) {flag_cut_e_energy = 1;} //enforce only two particles above 0.3MeV
 
         if (hit_track->size() > 3) {
             flag_cut_tracklength = 1;
@@ -473,8 +477,8 @@ void e_gamma() {
 
     //output number of events cut, some events may have multiple recorded tracks 
     cout << "Initial events: \t\t" << totalentries << "\n";
-    cout << "Events with 4 OM hits: \t\t" << cut_calohits << "\n";
-    cout << "Events with > 0.3MeV hits: \t" << cut_e_energy << "\n";
+    cout << "Events with > 2 OM hits: \t" << cut_calohits << "\n";
+    cout << "Events with two 0.3MeV hits: \t" << cut_e_energy << "\n";
     cout << "Events with -0.2 < dt < 50us: \t" << cut_OM_deltat << "\n";
     cout << "Events with track length > 3: \t" << good_events << "\n";
     cout << "Correlated electron and gamma:\t" << cut_correlated << "\n";
@@ -486,8 +490,8 @@ void e_gamma() {
     ofstream outtxt;
     outtxt.open("cuts.txt");
     outtxt << "Initial events:                " << totalentries << "\n";
-    outtxt << "Events with 4+ OM hits:        " << cut_calohits << "\n";
-    outtxt << "Events with > 0.3MeV hits:     " << cut_e_energy << "\n";
+    outtxt << "Events with > 2 OM hits:        " << cut_calohits << "\n";
+    outtxt << "Events with two 0.3MeV hits:     " << cut_e_energy << "\n";
     outtxt << "Events with -0.2 < dt < 50us:  " << cut_OM_deltat << "\n";
     outtxt << "Events with track length > 3:  " << good_events << "\n";
     outtxt << "Correlated electron and gamma: " << cut_correlated << "\n";
