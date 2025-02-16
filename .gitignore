@@ -58,6 +58,7 @@ zpositions.root
 e_gamma_events.txt
 zpositions_new_eq.root
 e_gamma_events.txt
+1093b/
 events/
 reportdraft/
 images/
@@ -78,3 +79,13 @@ tracker_activity.txt:Zone.Identifier
 1093/tracks.root
 SIM/cuts_SIM.txt
 SIM/e_gamma_events_SIM.txt
+sndisplay-tracker-test.png
+activity_1108.png
+cuts_SIM.txt
+.gitignore
+snemo_run-1101_udd.root
+snemo_run-1108_udd.root
+1101/tracks.root
+1108/tracks.root
+1166/tracks.root
+e_gamma_events_SIM.txt

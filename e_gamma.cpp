@@ -52,7 +52,7 @@ bool within_x(vector<int> a, vector<int> b, int x) {
 void e_gamma() {
 
     //get tree and setup relevant branches
-    TFile *f = new TFile("snemo_run-1093_udd.root", "READ");
+    TFile *f = new TFile("snemo_run-1166_udd.root", "READ");                    //change to whichever run required 
     TTree *tree = (TTree*)f->Get("SimData");
 
     gInterpreter->GenerateDictionary("vector<vector<int>>","vector");          //seems to fix 2D vectors
@@ -211,10 +211,17 @@ void e_gamma() {
     long time0 = 0, time1 = 0; 
 
     //record active trackers
-    long tracker_array[2034]; 
+    long tracker_array[2034] = {}; 
+    int affected = 0, unaffected = 0;
 
     for (int i=0; i < totalentries; i++) {
         tree->GetEntry(i);
+
+        //monitor tracker activity before any cuts
+        for (int j=0, j<trackercolumn->Size(), j++) {
+            tracker_array[trackerside->at(j)*1017 + trackercolumn->at(j)*9 + trackerlayer->at(j)] += 1;
+            trackerhist->Fill(trackerside->at(j)*1017 + trackercolumn->at(j)*9 + trackerlayer->at(j));
+        }
 
         if (i % 10000 == 0) {cout << i << " out of " << totalentries << "\n";}
 
@@ -248,6 +255,9 @@ void e_gamma() {
             continue;
         }
 
+        //for z=pos investigation
+        vector<int> tracker_zpos = {0, 0};
+
         for (int j=0; j<calohits; j++) {            //for each hit calorimeter j
 
             int col = calocolumn->at(j); 
@@ -278,10 +288,6 @@ void e_gamma() {
                 int tcol = trackercolumn->at(k);
                 int tlayer = trackerlayer->at(k);
                 int tside = trackerside->at(k);
-
-                //monitoring active trackers
-                tracker_array[tside*1017 + tcol*9 + tlayer] += 1;
-                trackerhist->Fill(tside*1017 + tcol*9 + tlayer);
 
                 if (trackerside->at(k) != caloside->at(j)) {continue;}          //check same side
                 if (trackerlayer->at(k) < 7) {continue;}                        //check layer 8 or 9
@@ -315,7 +321,13 @@ void e_gamma() {
 
                     if (z_gg >= z_min && z_gg <= z_max) {
                         flag_cut_zpos = 1;                      //z-pos cut 
+                        tracker_zpos[1] = 1;                    //for z-pos investigation
                     }    
+
+                    //for z-pos investigation
+                    if (tside == 0 && tcol == 14 && tlayer == 8) {
+                        tracker_zpos[0] = 1;
+                    }
 
                     track->push_back({tside, tcol, tlayer});
                     adj_tracker = 1; 
@@ -364,6 +376,7 @@ void e_gamma() {
                     e_col = calocolumn->at(j);
 
                     for (int p = 0; p<track->size(); p++) {
+                        //record track
                         hit_track->push_back(track->at(p).at(0)*1017 + track->at(p).at(1)*9 + track->at(p).at(2));
                     }
 
@@ -398,6 +411,11 @@ void e_gamma() {
 
                     eventtxt << i << "\n";
                     if (flag_cut_zpos == 1) {cut_zpos += 1;} //record at very end
+
+                    //z-pos investigation
+                    if (tracker_zpos[0] == 1) {
+                        if (flag_cut_zpos == 1) {unaffected += 1;} else {affected += 1;}
+                    }
                 }
             }
         }
@@ -416,9 +434,8 @@ void e_gamma() {
     cout << "Events with track length > 3: \t" << good_events << "\n";
     cout << "Correlated electron and gamma:\t" << cut_correlated << "\n";
     cout << "also correlated z-position:\t" << cut_zpos << "\n\n";
-    cout << "time of run: " << (time1-time0)*6.25/1000000000. << "s\n";
-    cout << "no. passed chosen tracker: " << passed_tracker << "\n";
-    cout << "no. passed tracker and z cut" << passed_tracker_and_z << "\n";
+    cout << "time of run: " << (time1-time0)*6.25/1000000000. << "s\n\n";
+    cout << "z-pos: " << affected << " events cut, " << unaffected << "\n";
 
     //quick text output to file 
     ofstream outtxt;
@@ -431,6 +448,7 @@ void e_gamma() {
     outtxt << "Correlated electron and gamma: " << cut_correlated << "\n";
     outtxt << "also correlated z-position:\t" << cut_zpos << "\n";
     outtxt << "time of run: " << (time1-time0)*6.25/1000000000. << "s\n\n";
+    outtxt << "z-pos: " << affected << " events cut, " << unaffected << "\n";
     outtxt.close();
 
     eventtxt.close();
