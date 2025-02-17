@@ -248,6 +248,8 @@ void e_gamma_sim() {
             continue;
         }
 
+        int no_high_energy = 0;
+
         for (int j=0; j<calohits; j++) {            //for each hit calorimeter j
 
             int col = calocolumn->at(j); 
@@ -270,7 +272,7 @@ void e_gamma_sim() {
             if (hit_caloid > 519) {continue;}    //main wall only
 
             if (hit_energy > 0.3) {         //energy cut
-                flag_cut_e_energy = 1;
+                no_high_energy += 1;
             } else {
                 continue;
             }
@@ -288,7 +290,7 @@ void e_gamma_sim() {
                 int tside = trackerside->at(k);
 
                 //skip trackers with low activity in the real run
-                if (tracker_activity[tside*1017 + tcol*9 + tlayer] < 5000) {continue;}
+                if (tracker_activity[tside*1017 + tcol*9 + tlayer] < 25000) {continue;}
 
                 //enforce only some known good cells (z-pos check only)
                 //if (tside != 0 || tcol < 9 || tcol > 37 || tlayer != 8) {continue;} revisit this later ----------------------
@@ -350,6 +352,9 @@ void e_gamma_sim() {
                         }
                         if (dupe == 1) {continue;}
 
+                        //dont include inactive trackers (need to think more on if this belongs here)
+                        if (tracker_activity[trackerside->at(m)*1017 + trackercolumn->at(m)*9 + trackerlayer->at(m)] < 25000) {continue;}
+
                         if (within_x(track->at(l), next_tracker, 2)) {       //append to track vector if within 2x2 box
                             track->push_back(next_tracker);               
                         }
@@ -374,6 +379,7 @@ void e_gamma_sim() {
             }
         }
 
+        if (no_high_energy == 2) {flag_cut_e_energy = 1;} //enforce only two particles above 0.3MeV
         if (hit_track->size() > 3) {
             flag_cut_tracklength = 1;
             good_events += 1;
@@ -411,24 +417,24 @@ void e_gamma_sim() {
     outtree->Write();
 
     //output number of events cut, some events may have multiple recorded tracks 
-    cout << "Initial events: \t\t" << totalentries << "\n";
-    cout << "Events with 4 OM hits: \t\t" << cut_calohits << "\n";
-    cout << "Events with > 0.3MeV hits: \t" << cut_e_energy << "\n";
-    cout << "Events with -0.2 < dt < 50us: \t" << cut_OM_deltat << "\n";
-    cout << "Events with track length > 3: \t" << good_events << "\n";
-    cout << "Correlated electron and gamma:\t" << cut_correlated << "\n";
-    cout << "also correlated z-position:\t" << cut_zpos << "\n";
+    cout << "Initial events:                 " << totalentries << "\n";
+    cout << "Events with >= 2 OM hits:       " << cut_calohits << "\n";
+    cout << "Events with -0.2 < dt < 50us:   " << cut_OM_deltat << "\n";
+    cout << "Events with track length > 3:   " << good_events << "\n";
+    cout << "Events with two > 0.3MeV hits:  " << cut_e_energy << "\n";
+    cout << "Correlated electron and gamma:  " << cut_correlated << "\n";
+    cout << "also correlated z-position:     " << cut_zpos << "\n";
 
     //quick text output to file 
     ofstream outtxt;
     outtxt.open("cuts_SIM.txt");
     outtxt << "Initial events:                " << totalentries << "\n";
-    outtxt << "Events with 4+ OM hits:        " << cut_calohits << "\n";
-    outtxt << "Events with > 0.3MeV hits:     " << cut_e_energy << "\n";
+    outtxt << "Events with >= 2 OM hits:      " << cut_calohits << "\n";
     outtxt << "Events with -0.2 < dt < 50us:  " << cut_OM_deltat << "\n";
     outtxt << "Events with track length > 3:  " << good_events << "\n";
+    outtxt << "Events with two > 0.3MeV hits: " << cut_e_energy << "\n";
     outtxt << "Correlated electron and gamma: " << cut_correlated << "\n";
-    outtxt << "also correlated z-position:\t" << cut_zpos << "\n";
+    outtxt << "also correlated z-position:    " << cut_zpos << "\n";
     outtxt.close();
 
     eventtxt.close();

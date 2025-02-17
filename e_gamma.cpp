@@ -52,7 +52,7 @@ bool within_x(vector<int> a, vector<int> b, int x) {
 void e_gamma() {
 
     //get tree and setup relevant branches
-    TFile *f = new TFile("snemo_run-1166_udd.root", "READ");                    //change to whichever run required 
+    TFile *f = new TFile("snemo_run-1108_udd.root", "READ");                    //change to whichever run required 
     TTree *tree = (TTree*)f->Get("SimData");
 
     gInterpreter->GenerateDictionary("vector<vector<int>>","vector");          //seems to fix 2D vectors
@@ -226,7 +226,7 @@ void e_gamma() {
     long tracker_array[2034] = {}; 
     int affected = 0, unaffected = 0;
 
-    for (int i=0; i < totalentries; i++) {
+    for (int i=0; i < 300000; i++) {
         tree->GetEntry(i);
 
         //monitor tracker activity before any cuts, might slow code quite a bit
@@ -476,26 +476,26 @@ void e_gamma() {
     outtree->Write();
 
     //output number of events cut, some events may have multiple recorded tracks 
-    cout << "Initial events: \t\t" << totalentries << "\n";
-    cout << "Events with > 2 OM hits: \t" << cut_calohits << "\n";
-    cout << "Events with two 0.3MeV hits: \t" << cut_e_energy << "\n";
-    cout << "Events with -0.2 < dt < 50us: \t" << cut_OM_deltat << "\n";
-    cout << "Events with track length > 3: \t" << good_events << "\n";
-    cout << "Correlated electron and gamma:\t" << cut_correlated << "\n";
-    cout << "also correlated z-position:\t" << cut_zpos << "\n\n";
+    cout << "Initial events:                 " << totalentries << "\n";
+    cout << "Events with >= 2 OM hits:       " << cut_calohits << "\n";
+    cout << "Events with -0.2 < dt < 50us:   " << cut_OM_deltat << "\n";
+    cout << "Events with track length > 3:   " << good_events << "\n";
+    cout << "Events with two > 0.3MeV hits:  " << cut_e_energy << "\n";
+    cout << "Correlated electron and gamma:  " << cut_correlated << "\n";
+    cout << "also correlated z-position:     " << cut_zpos << "\n\n";
     cout << "time of run: " << (time1-time0)*6.25/1000000000. << "s\n\n";
-    cout << "z-pos: " << affected << " events cut, " << unaffected << "\n";
+    cout << "z-pos test: " << affected << " of " << unaffected << "\n";
 
     //quick text output to file 
     ofstream outtxt;
     outtxt.open("cuts.txt");
     outtxt << "Initial events:                " << totalentries << "\n";
-    outtxt << "Events with > 2 OM hits:        " << cut_calohits << "\n";
-    outtxt << "Events with two 0.3MeV hits:     " << cut_e_energy << "\n";
+    outtxt << "Events with >= 2 OM hits:       " << cut_calohits << "\n";
     outtxt << "Events with -0.2 < dt < 50us:  " << cut_OM_deltat << "\n";
     outtxt << "Events with track length > 3:  " << good_events << "\n";
+    outtxt << "Events with two > 0.3MeV hits:   " << cut_e_energy << "\n";
     outtxt << "Correlated electron and gamma: " << cut_correlated << "\n";
-    outtxt << "also correlated z-position:\t" << cut_zpos << "\n";
+    outtxt << "also correlated z-position:    " << cut_zpos << "\n";
     outtxt << "time of run: " << (time1-time0)*6.25/1000000000. << "s\n\n";
     outtxt << "z-pos: " << affected << " events cut, " << unaffected << "\n";
     outtxt.close();
