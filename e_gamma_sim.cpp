@@ -241,7 +241,7 @@ void e_gamma_sim() {
         int e_side = 0, e_row = 0, e_col = 0;
         int g_side = 0, g_row = 0, g_col = 0;
 
-        if (calohits == 2) {
+        if (calohits >= 2) {
             flag_cut_calohits = 1;   //passed first cut
         } else {
             outtree->Fill();

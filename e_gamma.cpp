@@ -52,7 +52,7 @@ bool within_x(vector<int> a, vector<int> b, int x) {
 void e_gamma() {
 
     //get tree and setup relevant branches
-    TFile *f = new TFile("snemo_run-1108_udd.root", "READ");                    //change to whichever run required 
+    TFile *f = new TFile("snemo_run-1101_udd.root", "READ");                    //change to whichever run required 
     TTree *tree = (TTree*)f->Get("SimData");
 
     gInterpreter->GenerateDictionary("vector<vector<int>>","vector");          //seems to fix 2D vectors
@@ -226,7 +226,7 @@ void e_gamma() {
     long tracker_array[2034] = {}; 
     int affected = 0, unaffected = 0;
 
-    for (int i=0; i < 300000; i++) {
+    for (int i=0; i < totalentries; i++) {
         tree->GetEntry(i);
 
         //monitor tracker activity before any cuts, might slow code quite a bit
@@ -260,7 +260,7 @@ void e_gamma() {
         int e_side = 0, e_row = 0, e_col = 0;
         int g_side = 0, g_row = 0, g_col = 0;
 
-        if (calohits > 2) {
+        if (calohits >= 2) {
             flag_cut_calohits = 1;   //passed first cut
         } else {
             outtree->Fill();
