@@ -205,6 +205,7 @@ void e_gamma() {
     TH1D *gamma_spectrum = new TH1D("gamma_energies", "Gamma Energies", 140, 0, 3.5);
     TH1D *zposhist = new TH1D("z_positions", "z-positions around OM centre", 100, -5, 5);
     TH1D *trackerhist = new TH1D("trackers", "tracker activity distribution", 2034, 0, 2034);
+    TH1D *corr_hist = new TH1D("time_correlation", "delta t between electron and gamma", 200, -100, 100);
 
     //recording energy at only OM ID 123
     TH1D *spectrum_123 = new TH1D("spectrum_123", "Electron and gamma energies for OM 123", 100, 0, 5);
@@ -446,8 +447,20 @@ void e_gamma() {
         if (flag_cut_calohits && flag_cut_e_energy && flag_cut_e_energy && flag_cut_tracklength) {
             //check for adjacency or same column
             if (within_x({e_side, e_row, e_col}, {g_side, g_row, g_col}, 1) == 0 && e_col != g_col) {
-                //enforce time correlation 
-                if (abs(6.25*(e_hit_time - gamma_timestamp)) < 50) {
+                //float delta_T = 6.25*(e_hit_time - gamma_timestamp);         //uncalibrated
+
+                //apply time calibration correction             TODO: get calib file and import falling_cell branch
+                long calib_e_time = 6.25*e_hit_time;                     //into ns 
+                calib_e_time += (-time_calibration[e_hit_caloid] + (falling_cell->at()*(0.390625/256.)));
+
+                long calib_gamma_time = 6.25*gamma_timestamp;                  
+                calib_gamma_time += (-time_calibration[gamma_caloid] + (falling_cell->at()*(0.390625/256.)));
+
+                float delta_T = (calib_e_time - calib_gamma_time);
+                corr_hist->Fill(delta_T);
+
+                //enforce time correlation
+                if (abs(delta_T) < 50) {
                     flag_e_g_correlated = 1; 
                     cut_correlated += 1;
 
@@ -515,13 +528,16 @@ void e_gamma() {
     gamma_spectrum->SetTitle("Energy of Correlated Photons;Energy (MeV);Count");
     spectrum_123->SetTitle("Energy of correlated electrons and photons on OM 123;Energy (MeV);Count");
     trackerhist->SetTitle("Tracker activity over entire run;Tracker ID;Count");
+    corr_hist->SetTitle("Time difference between electron and gamma OM;Time difference (ns);Count")
     spectrum->Write();
     timehist->Write();
     gamma_spectrum->Write();
+    corr_hist->Write();
     spectrum_123->Write();
     trackerhist->Write();
 
-    gamma_spectrum->Draw();
+    corr_hist->Draw();
+    //gamma_spectrum->Draw();
     //spectrum->Draw();
     //timehist->Draw();
     //zposhist->Draw();
