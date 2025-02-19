@@ -203,6 +203,7 @@ void e_gamma_sim() {
     TH1D *timehist = new TH1D("time", "OM to tracker delta_t", 120, -20, 100);
     TH1D *gamma_spectrum = new TH1D("gamma_energies", "Gamma Energies", 140, 0, 3.5);
     TH1D *zposhist = new TH1D("z_positions", "z-positions around OM centre", 100, -5, 5);
+    TH1D *corr_hist = new TH1D("time_correlation", "delta t between electron and gamma", 200, -100, 100);
 
     //recording energy at only OM ID 123
     TH1D *spectrum_123 = new TH1D("spectrum_123", "Electron and gamma energies for OM 123", 100, 0, 5);
@@ -382,11 +383,7 @@ void e_gamma_sim() {
         if (no_high_energy == 2) {flag_cut_e_energy = 1;} //enforce only two particles above 0.3MeV
         if (hit_track->size() > 3) {
             flag_cut_tracklength = 1;
-            good_events += 1;
-            }
-        if (flag_cut_calohits == 1) {cut_calohits += 1;}        //counting events after each cut
-        if (flag_cut_e_energy == 1) {cut_e_energy += 1;}
-        if (flag_cut_OM_delta_t == 1) {cut_OM_deltat += 1;}
+        }
 
         //add electron-gamma correlation here?
         if (flag_cut_calohits && flag_cut_e_energy && flag_cut_e_energy && flag_cut_tracklength) {
@@ -395,7 +392,8 @@ void e_gamma_sim() {
                 //enforce time correlation 
                 if (abs(6.25*(e_hit_time - gamma_timestamp)) < 50) {
                     flag_e_g_correlated = 1; 
-                    cut_correlated += 1;
+
+                    corr_hist->Fill(6.25*(e_hit_time-gamma_timestamp));
 
                     //write to histograms
                     gamma_spectrum->Fill(gamma_energy);
@@ -405,7 +403,26 @@ void e_gamma_sim() {
                     if (e_hit_caloid == 123) {spectrum_123->Fill(e_hit_energy);}
 
                     eventtxt << i << "\n";
-                    if (flag_cut_zpos == 1) {cut_zpos += 1;} //record at very end
+                }
+            }
+        }
+
+        //trying out a nested if to count passes of ALL cuts
+        if (flag_cut_calohits == 1) {
+            cut_calohits += 1;
+            if (flag_cut_e_energy == 1) {
+                cut_e_energy += 1;
+                if (flag_cut_OM_delta_t == 1) {
+                    cut_OM_deltat += 1;
+                    if (flag_cut_tracklength == 1) {
+                        good_events += 1;
+                        if (flag_cut_zpos == 1) {
+                            cut_zpos += 1;
+                            if (flag_e_g_correlated == 1) {
+                                cut_correlated += 1;
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -419,22 +436,22 @@ void e_gamma_sim() {
     //output number of events cut, some events may have multiple recorded tracks 
     cout << "Initial events:                 " << totalentries << "\n";
     cout << "Events with >= 2 OM hits:       " << cut_calohits << "\n";
+    cout << "Events with two > 0.3MeV hits:  " << cut_e_energy << "\n";
     cout << "Events with -0.2 < dt < 50us:   " << cut_OM_deltat << "\n";
     cout << "Events with track length > 3:   " << good_events << "\n";
-    cout << "Events with two > 0.3MeV hits:  " << cut_e_energy << "\n";
-    cout << "Correlated electron and gamma:  " << cut_correlated << "\n";
-    cout << "also correlated z-position:     " << cut_zpos << "\n";
+    cout << "Correlated z-position:          " << cut_zpos << "\n";
+    cout << "Correlated electron and gamma:  " << cut_correlated << "\n\n";
 
     //quick text output to file 
     ofstream outtxt;
     outtxt.open("cuts_SIM.txt");
     outtxt << "Initial events:                " << totalentries << "\n";
     outtxt << "Events with >= 2 OM hits:      " << cut_calohits << "\n";
+    outtxt << "Events with two > 0.3MeV hits: " << cut_e_energy << "\n";
     outtxt << "Events with -0.2 < dt < 50us:  " << cut_OM_deltat << "\n";
     outtxt << "Events with track length > 3:  " << good_events << "\n";
-    outtxt << "Events with two > 0.3MeV hits: " << cut_e_energy << "\n";
-    outtxt << "Correlated electron and gamma: " << cut_correlated << "\n";
-    outtxt << "also correlated z-position:    " << cut_zpos << "\n";
+    outtxt << "Correlated z-position:         " << cut_zpos << "\n";
+    outtxt << "Correlated electron and gamma: " << cut_correlated << "\n\n";
     outtxt.close();
 
     eventtxt.close();
@@ -443,13 +460,16 @@ void e_gamma_sim() {
     timehist->SetTitle("Time difference between OM and adjacent tracker;delta_t (us);Count");
     gamma_spectrum->SetTitle("Energy of Correlated Photons;Energy (MeV);Count");
     spectrum_123->SetTitle("Energy of correlated electrons and photons on OM 123;Energy (MeV);Count");
+    corr_hist->SetTitle("Time difference between electron and gamma OM;Time difference (ns);Count");
 
     spectrum->Write();
     timehist->Write();
     gamma_spectrum->Write();
+    corr_hist->Write();
     spectrum_123->Write();
 
-    gamma_spectrum->Draw();
+    corr_hist->Draw();
+    //gamma_spectrum->Draw();
     //spectrum->Draw();
     //timehist->Draw();
     //zposhist->Draw();

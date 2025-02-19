@@ -123,18 +123,11 @@ void e_gamma() {
     tree->SetBranchAddress("digitracker.bottomcathodetimestamp", &R5);
     tree->SetBranchStatus("digitracker.topcathodetimestamp", 1);
     tree->SetBranchAddress("digitracker.topcathodetimestamp", &R6);
-
-    /* alternate way of cutting, leaving out for now 
-
-    //get cut of events with a calorimeter hit, maybe add tracker cells > 3
-    TCut cut_calohit = "digicalo.nohits > 3";    //pairing
-
-    tree->Draw(">>elist", cut_calohit, "entrylist");
-    TEntryList *elist = (TEntryList*)gDirectory->Get("elist");
-    int totalentries = elist->GetN();
-    cout << totalentries << " entries with 4+ calorimeter hits\n";
-
-    */
+    
+    //falling cell time for time calibration
+    vector<int> *falling_cell = new vector<int>;
+    tree->SetBranchStatus("digicalo.falling_cell", 1);
+    tree->SetBranchAddress("digicalo.falling_cell", &falling_cell);
 
     //create outfile and tree for particle tracks
     TFile *out = new TFile("tracks.root", "RECREATE");
@@ -187,12 +180,22 @@ void e_gamma() {
 
     //input charge-energy calibration from text
     double energy_conv = -1./4194.304;
-    vector<double> calib;
+    vector<double> calib = {};
     ifstream calib_file("run-1351_fee-charge-to-energy.txt");
     int n1;
     double n2;
     while (calib_file >> n1 >> n2) {
         calib.push_back(n2);
+    }
+
+    //import time calibration
+    vector<double> time_calibration = {};
+    ifstream time_file("output_data_merged_2.txt");
+    int n3;
+    double n4;
+    double n5;    //std error on the calibration, unused for now
+    while(time_file >> n3 >> n4 >> n5) {
+        time_calibration.push_back(n4);
     }
 
     //output correlated events to text for plotting/testing
@@ -227,7 +230,7 @@ void e_gamma() {
     long tracker_array[2034] = {}; 
     int affected = 0, unaffected = 0;
 
-    for (int i=0; i < totalentries; i++) {
+    for (int i=0; i < 50000; i++) {
         tree->GetEntry(i);
 
         //monitor tracker activity before any cuts, might slow code quite a bit
@@ -273,6 +276,9 @@ void e_gamma() {
 
         //trying new energy cut strategy
         int no_high_energy = 0;
+
+        int e_calo_index = 9999;
+        int gamma_calo_index = 9999;
 
         for (int j=0; j<calohits; j++) {            //for each hit calorimeter j
 
@@ -389,6 +395,7 @@ void e_gamma() {
                 gamma_energy = hit_energy;
                 gamma_caloid = hit_caloid;
                 gamma_timestamp = timestamp->at(j);
+                gamma_calo_index = j;
 
                 g_side = caloside->at(j);
                 g_row = calorow->at(j);
@@ -419,6 +426,7 @@ void e_gamma() {
                     e_hit_time = timestamp->at(j);
                     e_hit_energy = hit_energy;
                     e_hit_caloid = hit_caloid;
+                    e_calo_index = j;
 
                     e_side = caloside->at(j);
                     e_row = calorow->at(j);
@@ -437,27 +445,23 @@ void e_gamma() {
 
         if (hit_track->size() > 3) {
             flag_cut_tracklength = 1;
-            good_events += 1;
             }
-        if (flag_cut_calohits == 1) {cut_calohits += 1;}        //counting events after each cut
-        if (flag_cut_e_energy == 1) {cut_e_energy += 1;}
-        if (flag_cut_OM_delta_t == 1) {cut_OM_deltat += 1;}
 
         //add electron-gamma correlation here?
         if (flag_cut_calohits && flag_cut_e_energy && flag_cut_e_energy && flag_cut_tracklength) {
             //check for adjacency or same column
             if (within_x({e_side, e_row, e_col}, {g_side, g_row, g_col}, 1) == 0 && e_col != g_col) {
-                //float delta_T = 6.25*(e_hit_time - gamma_timestamp);         //uncalibrated
 
-                //apply time calibration correction             TODO: get calib file and import falling_cell branch
-                long calib_e_time = 6.25*e_hit_time;                     //into ns 
-                calib_e_time += (-time_calibration[e_hit_caloid] + (falling_cell->at()*(0.390625/256.)));
+                double delta_T = 999999;
 
-                long calib_gamma_time = 6.25*gamma_timestamp;                  
-                calib_gamma_time += (-time_calibration[gamma_caloid] + (falling_cell->at()*(0.390625/256.)));
+                if (e_hit_time > 0 && gamma_timestamp > 0) {
+                //apply time calibration correction
+                    double calib_e_time = 6.25*e_hit_time - time_calibration[e_hit_caloid] + ((falling_cell->at(e_calo_index)/256)*(0.390625));                 
+                    double calib_gamma_time = 6.25*gamma_timestamp - time_calibration[gamma_caloid] + ((falling_cell->at(gamma_calo_index)/256)*(0.390625));
 
-                float delta_T = (calib_e_time - calib_gamma_time);
-                corr_hist->Fill(delta_T);
+                    delta_T = (calib_e_time - calib_gamma_time);            //calibrated time difference
+                    corr_hist->Fill(delta_T);
+                }
 
                 //enforce time correlation
                 if (abs(delta_T) < 50) {
@@ -472,11 +476,30 @@ void e_gamma() {
                     if (e_hit_caloid == 123) {spectrum_123->Fill(e_hit_energy);}
 
                     eventtxt << i << "\n";
-                    if (flag_cut_zpos == 1) {cut_zpos += 1;} //record at very end
 
                     //z-pos investigation
                     if (tracker_zpos[0] == 1) {
                         if (flag_cut_zpos == 1) {unaffected += 1;} else {affected += 1;}
+                    }
+                }
+            }
+        }
+
+        //trying out a nested if to count passes of ALL cuts
+        if (flag_cut_calohits == 1) {
+            cut_calohits += 1;
+            if (flag_cut_e_energy == 1) {
+                cut_e_energy += 1;
+                if (flag_cut_OM_delta_t == 1) {
+                    cut_OM_deltat += 1;
+                    if (flag_cut_tracklength == 1) {
+                        good_events += 1;
+                        if (flag_cut_zpos == 1) {
+                            cut_zpos += 1;
+                            if (flag_e_g_correlated == 1) {
+                                cut_correlated += 1;
+                            }
+                        }
                     }
                 }
             }
@@ -491,11 +514,11 @@ void e_gamma() {
     //output number of events cut, some events may have multiple recorded tracks 
     cout << "Initial events:                 " << totalentries << "\n";
     cout << "Events with >= 2 OM hits:       " << cut_calohits << "\n";
+    cout << "Events with two > 0.3MeV hits:  " << cut_e_energy << "\n";
     cout << "Events with -0.2 < dt < 50us:   " << cut_OM_deltat << "\n";
     cout << "Events with track length > 3:   " << good_events << "\n";
-    cout << "Events with two > 0.3MeV hits:  " << cut_e_energy << "\n";
-    cout << "Correlated electron and gamma:  " << cut_correlated << "\n";
-    cout << "also correlated z-position:     " << cut_zpos << "\n\n";
+    cout << "Correlated z-position:          " << cut_zpos << "\n";
+    cout << "Correlated electron and gamma:  " << cut_correlated << "\n\n";
     cout << "time of run: " << (time1-time0)*6.25/1000000000. << "s\n\n";
     cout << "z-pos test: " << affected << " of " << unaffected << "\n";
 
@@ -503,12 +526,12 @@ void e_gamma() {
     ofstream outtxt;
     outtxt.open("cuts.txt");
     outtxt << "Initial events:                " << totalentries << "\n";
-    outtxt << "Events with >= 2 OM hits:       " << cut_calohits << "\n";
+    outtxt << "Events with >= 2 OM hits:      " << cut_calohits << "\n";
+    outtxt << "Events with two > 0.3MeV hits: " << cut_e_energy << "\n";
     outtxt << "Events with -0.2 < dt < 50us:  " << cut_OM_deltat << "\n";
     outtxt << "Events with track length > 3:  " << good_events << "\n";
-    outtxt << "Events with two > 0.3MeV hits:   " << cut_e_energy << "\n";
-    outtxt << "Correlated electron and gamma: " << cut_correlated << "\n";
-    outtxt << "also correlated z-position:    " << cut_zpos << "\n";
+    outtxt << "Correlated z-position:         " << cut_zpos << "\n";
+    outtxt << "Correlated electron and gamma: " << cut_correlated << "\n\n";
     outtxt << "time of run: " << (time1-time0)*6.25/1000000000. << "s\n\n";
     outtxt << "z-pos: " << affected << " events cut, " << unaffected << "\n";
     outtxt.close();
@@ -528,7 +551,7 @@ void e_gamma() {
     gamma_spectrum->SetTitle("Energy of Correlated Photons;Energy (MeV);Count");
     spectrum_123->SetTitle("Energy of correlated electrons and photons on OM 123;Energy (MeV);Count");
     trackerhist->SetTitle("Tracker activity over entire run;Tracker ID;Count");
-    corr_hist->SetTitle("Time difference between electron and gamma OM;Time difference (ns);Count")
+    corr_hist->SetTitle("Time difference between electron and gamma OM;Time difference (ns);Count");
     spectrum->Write();
     timehist->Write();
     gamma_spectrum->Write();
