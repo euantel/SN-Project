@@ -65,7 +65,7 @@ void e_gamma_sim() {
     vector<int> *caloside = new vector<int>;
     vector<int> *calocolumn = new vector<int>;
     vector<int> *calorow = new vector<int>;
-    vector<long> *timestamp = new vector<long>;
+    vector<double> *timestamp = new vector<double>;
     vector<double> *caloenergy = new vector<double>;
     vector<int> *calocharge = new vector<int>; //temporary check
     vector<int> *trackerid = new vector<int>;
@@ -86,8 +86,8 @@ void e_gamma_sim() {
     tree->SetBranchAddress("digicalo.column", &calocolumn);
     tree->SetBranchStatus("digicalo.row", 1);
     tree->SetBranchAddress("digicalo.row", &calorow);
-    tree->SetBranchStatus("digicalo.timestamp", 1);
-    tree->SetBranchAddress("digicalo.timestamp", &timestamp);
+    tree->SetBranchStatus("calo.time", 1);                          //changed this to calo.time 
+    tree->SetBranchAddress("calo.time", &timestamp);
     tree->SetBranchStatus("calo.energy", 1);                            //Simuation uses calo.energy rather than digicalo.charge
     tree->SetBranchAddress("calo.energy", &caloenergy);
     tree->SetBranchStatus("digicalo.charge", 1);                          
@@ -148,7 +148,7 @@ void e_gamma_sim() {
     outtree->Branch("digicalo.side", &caloside);
     outtree->Branch("digicalo.column", &calocolumn);
     outtree->Branch("digicalo.row", &calorow);
-    outtree->Branch("digicalo.timestamp", &timestamp);
+    outtree->Branch("calo.time", &timestamp);
     outtree->Branch("calo.energy", &caloenergy);
     outtree->Branch("digicalo.wall", &wall);
     outtree->Branch("digitracker.nohits", &trackerhits);
@@ -298,7 +298,7 @@ void e_gamma_sim() {
 
                 if (tcol <= tcol_max && tcol >= tcol_min) {                    //within +- 4 range, start track 
 
-                    long delta_t = (2.*anode_R0->at(k).at(0) - timestamp->at(j))*6.25/1000.;         //microseconds
+                    double delta_t = (2.*anode_R0->at(k).at(0) - timestamp->at(j))*6.25/1000.;         //microseconds
                     timehist->Fill(delta_t);
 
                     if ((delta_t > -0.2 && delta_t < 50)) {     //time cut 
@@ -390,7 +390,7 @@ void e_gamma_sim() {
             //check for adjacency or same column
             if (within_x({e_side, e_row, e_col}, {g_side, g_row, g_col}, 1) == 0 && e_col != g_col) {
                 //enforce time correlation 
-                if (abs(6.25*(e_hit_time - gamma_timestamp)) < 50) {
+                if (abs(6.25*(e_hit_time - gamma_timestamp)) < 20) {
                     flag_e_g_correlated = 1; 
 
                     corr_hist->Fill(6.25*(e_hit_time-gamma_timestamp));

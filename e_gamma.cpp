@@ -52,7 +52,7 @@ bool within_x(vector<int> a, vector<int> b, int x) {
 void e_gamma() {
 
     //get tree and setup relevant branches
-    TFile *f = new TFile("snemo_run-1101_udd.root", "READ");                    //change to whichever run required 
+    TFile *f = new TFile("snemo_run-1108_udd.root", "READ");                    //change to whichever run required 
     TTree *tree = (TTree*)f->Get("SimData");
 
     gInterpreter->GenerateDictionary("vector<vector<int>>","vector");          //seems to fix 2D vectors
@@ -230,7 +230,7 @@ void e_gamma() {
     long tracker_array[2034] = {}; 
     int affected = 0, unaffected = 0;
 
-    for (int i=0; i < 50000; i++) {
+    for (int i=0; i < totalentries; i++) {
         tree->GetEntry(i);
 
         //monitor tracker activity before any cuts, might slow code quite a bit
@@ -319,7 +319,7 @@ void e_gamma() {
 
                 if (tcol <= tcol_max && tcol >= tcol_min) {                    //within +- 4 range, start track 
 
-                    long delta_t = (2.*anode_R0->at(k).at(0) - timestamp->at(j))*6.25/1000.;         //microseconds
+                    double delta_t = (2.*anode_R0->at(k).at(0) - timestamp->at(j))*6.25/1000.;         //microseconds
                     timehist->Fill(delta_t);
 
                     if ((delta_t > -0.2 && delta_t < 50)) {     //time cut 
@@ -455,7 +455,7 @@ void e_gamma() {
                 double delta_T = 999999;
 
                 if (e_hit_time > 0 && gamma_timestamp > 0) {
-                //apply time calibration correction
+                    //apply time calibration correction
                     double calib_e_time = 6.25*e_hit_time - time_calibration[e_hit_caloid] + ((falling_cell->at(e_calo_index)/256)*(0.390625));                 
                     double calib_gamma_time = 6.25*gamma_timestamp - time_calibration[gamma_caloid] + ((falling_cell->at(gamma_calo_index)/256)*(0.390625));
 
@@ -464,7 +464,7 @@ void e_gamma() {
                 }
 
                 //enforce time correlation
-                if (abs(delta_T) < 50) {
+                if (abs(delta_T) < 20) {
                     flag_e_g_correlated = 1; 
                     cut_correlated += 1;
 
