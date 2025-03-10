@@ -52,7 +52,7 @@ bool within_x(vector<int> a, vector<int> b, int x) {
 void e_gamma() {
 
     //get tree and setup relevant branches
-    TFile *f = new TFile("snemo_run-1166_udd.root", "READ");                    //change to whichever run required 
+    TFile *f = new TFile("snemo_run-1093_udd.root", "READ");                    //change to whichever run required 
     TTree *tree = (TTree*)f->Get("SimData");
 
     gInterpreter->GenerateDictionary("vector<vector<int>>","vector");          //seems to fix 2D vectors
@@ -469,7 +469,6 @@ void e_gamma() {
                 //enforce time correlation
                 if (abs(delta_T) < 20) {
                     flag_e_g_correlated = 1; 
-                    cut_correlated += 1;
 
                     //fill histograms
                     gamma_spectrum->Fill(gamma_energy);
