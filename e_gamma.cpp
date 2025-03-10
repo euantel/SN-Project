@@ -52,7 +52,7 @@ bool within_x(vector<int> a, vector<int> b, int x) {
 void e_gamma() {
 
     //get tree and setup relevant branches
-    TFile *f = new TFile("snemo_run-1093_udd.root", "READ");                    //change to whichever run required 
+    TFile *f = new TFile("snemo_run-1166_udd.root", "READ");                    //change to whichever run required 
     TTree *tree = (TTree*)f->Get("SimData");
 
     gInterpreter->GenerateDictionary("vector<vector<int>>","vector");          //seems to fix 2D vectors
@@ -203,15 +203,14 @@ void e_gamma() {
     eventtxt.open("e_gamma_events.txt");
 
     //check specific calorimeter for energy spectrum
-    TH1D *spectrum = new TH1D("spectrum", "Energies for correlated electrons", 100, 0, 5);
+    TH1D *spectrum = new TH1D("spectrum", "Energies for correlated electrons", 100, 0, 4);
     TH1D *timehist = new TH1D("time", "OM to tracker delta_t", 120, -20, 100);
-    TH1D *gamma_spectrum = new TH1D("gamma_energies", "Gamma Energies", 140, 0, 3.5);
+    TH1D *gamma_spectrum = new TH1D("gamma_energies", "Gamma Energies", 140, 0, 4);
     TH1D *zposhist = new TH1D("z_positions", "z-positions around OM centre", 100, -5, 5);
-    TH1D *trackerhist = new TH1D("trackers", "tracker activity distribution", 2034, 0, 2034);
     TH1D *corr_hist = new TH1D("time_correlation", "delta t between electron and gamma", 200, -100, 100);
-
-    //recording energy at only OM ID 123
-    TH1D *spectrum_123 = new TH1D("spectrum_123", "Electron and gamma energies for OM 123", 100, 0, 5);
+    
+    //ALL energies plot
+    TH1D *tot_spectrum = new TH1D("total_spectrum", "Energy deposited per OM Hit", 100, 0, 4);
 
     int good_events = 0;
     int totalentries = tree->GetEntries();
@@ -227,7 +226,7 @@ void e_gamma() {
     long time0 = 0, time1 = 0; 
 
     //record active trackers
-    long tracker_array[2034] = {}; 
+    //long tracker_array[2034] = {};            temporarily ignoring this
     int affected = 0, unaffected = 0;
 
     int entries = totalentries;
@@ -237,11 +236,10 @@ void e_gamma() {
     for (int i=0; i < entries; i++) {
         tree->GetEntry(i);
 
-        //monitor tracker activity before any cuts, might slow code quite a bit
+        /*monitor tracker activity before any cuts, might slow code quite a bit
         for (int J=0; J<trackercolumn->size(); J++) {
             tracker_array[trackerside->at(J)*1017 + trackercolumn->at(J)*9 + trackerlayer->at(J)] += 1;
-            //trackerhist->Fill(trackerside->at(J)*1017 + trackercolumn->at(J)*9 + trackerlayer->at(J));
-        }
+        }*/
 
         if (i % 10000 == 0) {cout << i << " out of " << entries << "\n";}
 
@@ -296,6 +294,8 @@ void e_gamma() {
 
             int hit_caloid = (13*col) + (260*caloside->at(j)) + calorow->at(j);          
             double hit_energy = (charge->at(j))*calib[hit_caloid]*energy_conv;             //changed to MeV and flipped sign
+
+            tot_spectrum->Fill(hit_energy);
 
             if (hit_caloid > 519) {continue;}    //main wall only
 
@@ -474,9 +474,6 @@ void e_gamma() {
                     gamma_spectrum->Fill(gamma_energy);
                     spectrum->Fill(e_hit_energy);
 
-                    if (gamma_caloid == 123) {spectrum_123->Fill(gamma_energy);}
-                    if (e_hit_caloid == 123) {spectrum_123->Fill(e_hit_energy);}
-
                     eventtxt << i << "\n";
 
                     //z-pos investigation
@@ -540,26 +537,24 @@ void e_gamma() {
 
     eventtxt.close();
 
-    //write tracker activity
+    /*write tracker activity
     ofstream trackertxt;
     trackertxt.open("tracker_activity.txt");
     for (int i=0; i<2034; i++) {
         trackertxt << tracker_array[i] << "\n";
     }
-    trackertxt.close();
+    trackertxt.close();*/
 
     spectrum->SetTitle("Energy of Correlated Electrons;Energy (MeV);Count");
     timehist->SetTitle("Time difference between OM and adjacent tracker;delta_t (us);Count");
     gamma_spectrum->SetTitle("Energy of Correlated Photons;Energy (MeV);Count");
-    spectrum_123->SetTitle("Energy of correlated electrons and photons on OM 123;Energy (MeV);Count");
-    trackerhist->SetTitle("Tracker activity over entire run;Tracker ID;Count");
     corr_hist->SetTitle("Time difference between electron and gamma OM;Time difference (ns);Count");
+    tot_spectrum->SetTitle("Energy deposited per OM;Energy (MeV);Count");
+    tot_spectrum->Write();
     spectrum->Write();
     timehist->Write();
     gamma_spectrum->Write();
     corr_hist->Write();
-    spectrum_123->Write();
-    trackerhist->Write();
 
     gamma_spectrum->Draw();
 
