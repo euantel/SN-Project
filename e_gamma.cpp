@@ -52,7 +52,7 @@ bool within_x(vector<int> a, vector<int> b, int x) {
 void e_gamma() {
 
     //get tree and setup relevant branches
-    TFile *f = new TFile("snemo_run-1108_udd.root", "READ");                    //change to whichever run required 
+    TFile *f = new TFile("snemo_run-1166_udd.root", "READ");                    //change to whichever run required 
     TTree *tree = (TTree*)f->Get("SimData");
 
     gInterpreter->GenerateDictionary("vector<vector<int>>","vector");          //seems to fix 2D vectors
@@ -180,7 +180,7 @@ void e_gamma() {
 
     //input charge-energy calibration from text
     double energy_conv = -1./4194.304;
-    vector<double> calib = {};
+    vector<double> calib;
     ifstream calib_file("run-1351_fee-charge-to-energy.txt");
     int n1;
     double n2;
@@ -189,7 +189,7 @@ void e_gamma() {
     }
 
     //import time calibration
-    vector<double> time_calibration = {};
+    vector<double> time_calibration;
     ifstream time_file("output_data_merged_2.txt");
     int n3;
     double n4;
@@ -230,20 +230,24 @@ void e_gamma() {
     long tracker_array[2034] = {}; 
     int affected = 0, unaffected = 0;
 
-    for (int i=0; i < totalentries; i++) {
+    int entries = totalentries;
+
+    vector<vector<int>> *track = new vector<vector<int>>;
+
+    for (int i=0; i < entries; i++) {
         tree->GetEntry(i);
 
         //monitor tracker activity before any cuts, might slow code quite a bit
         for (int J=0; J<trackercolumn->size(); J++) {
             tracker_array[trackerside->at(J)*1017 + trackercolumn->at(J)*9 + trackerlayer->at(J)] += 1;
-            trackerhist->Fill(trackerside->at(J)*1017 + trackercolumn->at(J)*9 + trackerlayer->at(J));
+            //trackerhist->Fill(trackerside->at(J)*1017 + trackercolumn->at(J)*9 + trackerlayer->at(J));
         }
 
-        if (i % 10000 == 0) {cout << i << " out of " << totalentries << "\n";}
+        if (i % 10000 == 0) {cout << i << " out of " << entries << "\n";}
 
         //record time of run 
         if (i == 0) {time0 = timestamp->at(0);}
-        if (i == (totalentries-1)) {time1 = timestamp->at(timestamp->size()-1);}
+        if (i == (entries-1)) {time1 = timestamp->at(timestamp->size()-1);}
 
         //set default values
         e_hit_time = -1;
@@ -286,7 +290,6 @@ void e_gamma() {
             float tcol_min = tab_column.at(col) - 4.; 
             float tcol_max = tab_column.at(col) + 4.;
 
-            vector<vector<int>> *track = new vector<vector<int>>;
             track->clear();
 
             bool adj_tracker = 0;
@@ -452,7 +455,7 @@ void e_gamma() {
             //check for adjacency or same column
             if (within_x({e_side, e_row, e_col}, {g_side, g_row, g_col}, 1) == 0 && e_col != g_col) {
 
-                double delta_T = 999999;
+                double delta_T = 999999.;
 
                 if (e_hit_time > 0 && gamma_timestamp > 0) {
                     //apply time calibration correction
@@ -559,10 +562,6 @@ void e_gamma() {
     spectrum_123->Write();
     trackerhist->Write();
 
-    corr_hist->Draw();
-    //gamma_spectrum->Draw();
-    //spectrum->Draw();
-    //timehist->Draw();
-    //zposhist->Draw();
+    gamma_spectrum->Draw();
 
 }

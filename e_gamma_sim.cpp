@@ -115,6 +115,10 @@ void e_gamma_sim() {
     tree->SetBranchStatus("digitracker.topcathodetimestamp", 1);
     tree->SetBranchAddress("digitracker.topcathodetimestamp", &R6);
 
+    std::vector<double> *trackertime = new std::vector<double>;
+    tree->SetBranchStatus("truetracker.time", 1);
+    tree->SetBranchAddress("truetracker.time", &trackertime);
+
     /* alternate way of cutting, leaving out for now 
 
     //get cut of events with a calorimeter hit, maybe add tracker cells > 3
@@ -132,7 +136,7 @@ void e_gamma_sim() {
     TTree *outtree = new TTree("tracks", "SimData Tracks");
     int e_hit_caloid = 0, gamma_caloid;
     double e_hit_energy, gamma_energy = 0;
-    long e_hit_time = 0, gamma_timestamp = 0;
+    double e_hit_time = 0, gamma_timestamp = 0;
     vector<int> *hit_track = new vector<int>;                         //vector of IDs
 
     //FLAGS                                
@@ -298,9 +302,11 @@ void e_gamma_sim() {
 
                 if (tcol <= tcol_max && tcol >= tcol_min) {                    //within +- 4 range, start track 
 
-                    double delta_t = (2.*anode_R0->at(k).at(0) - timestamp->at(j))*6.25/1000.;         //microseconds
+                    double delta_t = trackertime->at(k) - timestamp->at(j);    //need to clarify this 
                     timehist->Fill(delta_t);
 
+                    delta_t = 0; //TEMPORARY TO GET SOME DATA
+                    
                     if ((delta_t > -0.2 && delta_t < 50)) {     //time cut 
                         flag_cut_OM_delta_t = 1;
                     }
@@ -390,10 +396,10 @@ void e_gamma_sim() {
             //check for adjacency or same column
             if (within_x({e_side, e_row, e_col}, {g_side, g_row, g_col}, 1) == 0 && e_col != g_col) {
                 //enforce time correlation 
-                if (abs(6.25*(e_hit_time - gamma_timestamp)) < 20) {
+                if (abs((e_hit_time - gamma_timestamp)) < 20) {
                     flag_e_g_correlated = 1; 
 
-                    corr_hist->Fill(6.25*(e_hit_time-gamma_timestamp));
+                    corr_hist->Fill((e_hit_time-gamma_timestamp));
 
                     //write to histograms
                     gamma_spectrum->Fill(gamma_energy);
