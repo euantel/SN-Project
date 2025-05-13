@@ -37,8 +37,9 @@ electron and gamma are time correlated by < 50ns
 
 records OM location/energy/timestamp for both at a given event
 and records basic track reconstruction of electron
+and some useful histograms
 
-E. Telfer 2024
+E. Telfer 2025
 */
 
 bool within_x(vector<int> a, vector<int> b, int x) {
@@ -49,14 +50,14 @@ bool within_x(vector<int> a, vector<int> b, int x) {
     return 1;
 }
 
-void e_gamma() {
+void e_gamma(int run_number) {
 
     //get tree and setup relevant branches
-    TFile *f = new TFile("snemo_run-1166_udd.root", "READ");                    //change to whichever run required 
+    TFile *f = new TFile(Form("snemo_run-%d_udd.root", run_number), "READ");                    
     TTree *tree = (TTree*)f->Get("SimData");
 
-    gInterpreter->GenerateDictionary("vector<vector<int>>","vector");          //seems to fix 2D vectors
-    gInterpreter->GenerateDictionary("vector<vector<long>>","vector");
+    gInterpreter->GenerateDictionary("vector<vector<int> >","vector");          //seems to fix 2D vectors
+    gInterpreter->GenerateDictionary("vector<vector<long> >","vector");
 
     int event = 0;
     int calohits = 0;
@@ -71,7 +72,6 @@ void e_gamma() {
     vector<int> *trackerside = new vector<int>;
     vector<int> *trackercolumn = new vector<int>;
     vector<int> *trackerlayer = new vector<int>;
-    vector<int> *wall = new vector<int>;
     tree->SetBranchStatus("*", 0);
     tree->SetBranchStatus("header.eventnumber", 1);
     tree->SetBranchAddress("header.eventnumber", &event);
@@ -89,8 +89,6 @@ void e_gamma() {
     tree->SetBranchAddress("digicalo.timestamp", &timestamp);
     tree->SetBranchStatus("digicalo.charge", 1);
     tree->SetBranchAddress("digicalo.charge", &charge);
-    tree->SetBranchStatus("digicalo.wall", 1);
-    tree->SetBranchAddress("digicalo.wall", &wall);
     tree->SetBranchStatus("digitracker.id", 1);                    //trackers
     tree->SetBranchAddress("digitracker.id", &trackerid);
     tree->SetBranchStatus("digitracker.nohits", 1);                 
@@ -152,12 +150,11 @@ void e_gamma() {
     outtree->Branch("digicalo.row", &calorow);
     outtree->Branch("digicalo.timestamp", &timestamp);
     outtree->Branch("digicalo.charge", &charge);
-    outtree->Branch("digicalo.wall", &wall);
     outtree->Branch("digitracker.nohits", &trackerhits);
     outtree->Branch("digitracker.side", &trackerside);
     outtree->Branch("digitracker.column", &trackercolumn);
     outtree->Branch("digitracker.layer", &trackerlayer);
-    outtree->Branch("digitracker.anodetimestampR0", &anode_R0);
+    //outtree->Branch("digitracker.anodetimestampR0", &anode_R0);
 
     //cut flags, 0 = failed cut 
     outtree->Branch("pass_cut_calohits", &flag_cut_calohits, "flag_cut_calohits/O");
@@ -205,12 +202,9 @@ void e_gamma() {
     //check specific calorimeter for energy spectrum
     TH1D *spectrum = new TH1D("spectrum", "Energies for correlated electrons", 100, 0, 4);
     TH1D *timehist = new TH1D("time", "OM to tracker delta_t", 120, -20, 100);
-    TH1D *gamma_spectrum = new TH1D("gamma_energies", "Gamma Energies", 140, 0, 4);
+    TH1D *gamma_spectrum = new TH1D("gamma_energies", "Gamma Energies", 160, 0, 4);
     TH1D *zposhist = new TH1D("z_positions", "z-positions around OM centre", 100, -5, 5);
     TH1D *corr_hist = new TH1D("time_correlation", "delta t between electron and gamma", 200, -100, 100);
-    
-    //ALL energies plot
-    TH1D *tot_spectrum = new TH1D("total_spectrum", "Energy deposited per OM Hit", 100, 0, 4);
 
     int good_events = 0;
     int totalentries = tree->GetEntries();
@@ -229,7 +223,7 @@ void e_gamma() {
     //long tracker_array[2034] = {};            temporarily ignoring this
     int affected = 0, unaffected = 0;
 
-    int entries = totalentries;
+    int entries = 4667000;
 
     vector<vector<int>> *track = new vector<vector<int>>;
 
@@ -295,8 +289,6 @@ void e_gamma() {
             int hit_caloid = (13*col) + (260*caloside->at(j)) + calorow->at(j);          
             double hit_energy = (charge->at(j))*calib[hit_caloid]*energy_conv;             //changed to MeV and flipped sign
 
-            tot_spectrum->Fill(hit_energy);
-
             if (hit_caloid > 519) {continue;}    //main wall only
 
             if (hit_energy > 0.3) {         //energy cut
@@ -306,8 +298,8 @@ void e_gamma() {
             }
 
             //calc OM z-range
-            double z_min = -1.1165 + 0.18714*calorow->at(j) - 1;
-            double z_max = -1.1165 + 0.18714*calorow->at(j) + 1;
+            double z_min = -1.1165 + 0.18714*calorow->at(j) - 1.;
+            double z_max = -1.1165 + 0.18714*calorow->at(j) + 1.;
 
             for (int k=0; k<trackercolumn->size(); k++) {
                 int tcol = trackercolumn->at(k);
@@ -316,9 +308,6 @@ void e_gamma() {
 
                 if (trackerside->at(k) != caloside->at(j)) {continue;}          //check same side
                 if (trackerlayer->at(k) < 7) {continue;}                        //check layer 8 or 9
-
-                //enforce only some known good cells (z-pos check only)
-                //if (tside != 0 || tcol < 9 || tcol > 37 || tlayer != 8) {continue;} revisit this later ----------------------
 
                 if (tcol <= tcol_max && tcol >= tcol_min) {                    //within +- 4 range, start track 
 
@@ -374,7 +363,7 @@ void e_gamma() {
                         //newer calulation
                         z_gg = (z_H/2)*t_ratio - (z_k*(z_H*z_H)/4)*t_ratio*(1-abs(t_ratio));
 
-                        zposhist->Fill(z_gg - (z_min + z_max)/2.);
+                        zposhist->Fill(z_gg - ((z_min + z_max)/2.));
                     }
 
                     if (z_gg >= z_min && z_gg <= z_max) {
@@ -450,7 +439,7 @@ void e_gamma() {
             flag_cut_tracklength = 1;
             }
 
-        //add electron-gamma correlation here?
+        //add electron-gamma correlation here
         if (flag_cut_calohits && flag_cut_e_energy && flag_cut_e_energy && flag_cut_tracklength) {
             //check for adjacency or same column
             if (within_x({e_side, e_row, e_col}, {g_side, g_row, g_col}, 1) == 0 && e_col != g_col) {
@@ -485,6 +474,7 @@ void e_gamma() {
         }
 
         //trying out a nested if to count passes of ALL cuts
+        //not the best but it works for the final value
         if (flag_cut_calohits == 1) {
             cut_calohits += 1;
             if (flag_cut_e_energy == 1) {
@@ -549,13 +539,12 @@ void e_gamma() {
     timehist->SetTitle("Time difference between OM and adjacent tracker;delta_t (us);Count");
     gamma_spectrum->SetTitle("Energy of Correlated Photons;Energy (MeV);Count");
     corr_hist->SetTitle("Time difference between electron and gamma OM;Time difference (ns);Count");
-    tot_spectrum->SetTitle("Energy deposited per OM;Energy (MeV);Count");
-    tot_spectrum->Write();
+    zposhist->SetTitle("Relative Z-position;Position;Count");
     spectrum->Write();
     timehist->Write();
     gamma_spectrum->Write();
     corr_hist->Write();
+    zposhist->Write();
 
     gamma_spectrum->Draw();
-
 }

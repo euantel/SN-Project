@@ -32,13 +32,7 @@
 using namespace std;
 
 /* 
-checks a given file for electron+gamma like events
-electron and gamma are time correlated by < 50ns 
-
-records OM location/energy/timestamp for both at a given event
-and records basic track reconstruction of electron
-
-E. Telfer 2024
+for application to a simulated dataset
 */
 
 bool within_x(vector<int> a, vector<int> b, int x) {
